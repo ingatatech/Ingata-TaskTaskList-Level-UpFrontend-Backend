@@ -37,6 +37,7 @@ import { useToast } from "@/hooks/use-toast"
 import { userAPI, adminTaskAPI } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 
+
 // These interfaces define the shape of your data.
 // They are unchanged from your original code.
 interface User {
@@ -126,20 +127,23 @@ export default function AdminDashboard() {
     setIsLoading(true)
     setUsersError(null)
     try {
-      const response = (await userAPI.getUsers(usersCurrentPage, usersPerPage, {
+      const response = await userAPI.getUsers(usersCurrentPage, usersPerPage, {
         email: searchTerm,
         status: filterStatus === "all" ? undefined : filterStatus,
-      })) as unknown as PaginatedApiResponse<User>
+      })
+      
+      console.log("Users API response:", response) // Debug log
       
       // Check if response is valid
       if (!response) {
         throw new Error("No response from server")
       }
       
-      // Update users state with the data from the current page
-      setUsers(Array.isArray(response.data) ? response.data : [])
-      // Update the total users count from the API response
-      setTotalUsersCount(response.totalItems || 0)
+      // Handle your API response format: { total, page, limit, data }
+     setUsers((response?.data || []) as any[])
+      setTotalUsersCount(response.total || 0) // Use 'total' not 'totalItems'
+      
+      console.log("Set users:", response.data?.length, "Total count:", response.total) // Debug log
     } catch (error) {
       console.error("Failed to fetch users:", error)
       setUsersError(error instanceof Error ? error.message : "Failed to fetch users")
@@ -166,12 +170,13 @@ export default function AdminDashboard() {
       const filters = {
         title: taskSearchTerm || undefined,
         status: taskStatusFilter === "all" ? undefined : taskStatusFilter,
-        priority: taskPriorityFilter === "all" ? undefined : taskPriorityFilter,
+        // Note: Your API doesn't support priority filtering yet
+        // priority: taskPriorityFilter === "all" ? undefined : taskPriorityFilter,
       };
 
       console.log("Fetching tasks with filters:", filters) // Debug log
 
-      const response = (await adminTaskAPI.getAllTasks(tasksCurrentPage, tasksPerPage, filters)) as unknown as PaginatedApiResponse<Task> | Task[]
+      const response = await adminTaskAPI.getAllTasks(tasksCurrentPage, tasksPerPage, filters)
       
       console.log("Tasks API response:", response) // Debug log
       
@@ -180,35 +185,11 @@ export default function AdminDashboard() {
         throw new Error("No response from server")
       }
       
-      // Handle different response formats
-      let tasks: Task[] = []
-      let totalCount = 0
+      // Handle your API response format: { total, page, limit, data }
+      setAllTasks((response?.data as any[]) || [])  
+      setTotalTasksCount(response.total || 0) // Use 'total' not 'totalItems'
       
-      if (Array.isArray(response)) {
-        // If response is directly an array
-        tasks = response
-        totalCount = response.length
-      } else if (response.data && Array.isArray(response.data)) {
-        // If response has a data property with array
-        tasks = response.data
-        totalCount = response.totalItems || response.data.length
-      } else if (response.tasks && Array.isArray(response.tasks)) {
-        // If response has a tasks property with array
-        tasks = response.tasks
-        totalCount = response.totalItems || response.tasks.length
-      } else {
-        // Handle any other response format
-        console.warn("Unexpected response format:", response)
-        tasks = []
-        totalCount = 0
-      }
-      
-      // Update tasks state with the data from the current page
-      setAllTasks(tasks)
-      // Update the total tasks count from the API response
-      setTotalTasksCount(totalCount)
-      
-      console.log("Set tasks:", tasks.length, "Total count:", totalCount) // Debug log
+      console.log("Set tasks:", response.data?.length, "Total count:", response.total) // Debug log
       
     } catch (error) {
       console.error("Failed to fetch tasks:", error)
@@ -237,17 +218,29 @@ export default function AdminDashboard() {
     if (user?.role === "admin" && (activeSection === "overview" || activeSection === "tasks")) {
       fetchAllTasks()
     }
-  }, [user, tasksCurrentPage, taskSearchTerm, taskStatusFilter, taskPriorityFilter, activeSection])
+  }, [user, tasksCurrentPage, taskSearchTerm, taskStatusFilter, activeSection]) // Removed taskPriorityFilter
 
-  // Reset pagination when switching sections
+  // Reset pagination when switching sections or changing filters
   useEffect(() => {
     setUsersCurrentPage(1)
+  }, [searchTerm, filterStatus])
+
+  useEffect(() => {
     setTasksCurrentPage(1)
-    setSearchTerm("")
-    setFilterStatus("all")
-    setTaskSearchTerm("")
-    setTaskStatusFilter("all")
-    setTaskPriorityFilter("all")
+  }, [taskSearchTerm, taskStatusFilter]) // Removed taskPriorityFilter
+
+  // Reset all states when switching sections
+  useEffect(() => {
+    if (activeSection === "users") {
+      setSearchTerm("")
+      setFilterStatus("all")
+      setUsersCurrentPage(1)
+    } else if (activeSection === "tasks") {
+      setTaskSearchTerm("")
+      setTaskStatusFilter("all")
+      // setTaskPriorityFilter("all") // Removed since not supported by backend
+      setTasksCurrentPage(1)
+    }
   }, [activeSection])
 
   // No change to other functions, they remain the same.
@@ -477,7 +470,7 @@ export default function AdminDashboard() {
   )
 
   const renderUserManagement = () => {
-    // The filtering logic is now handled by the API call in useEffect
+    // Calculate pagination for users
     const totalUsersPages = Math.ceil(totalUsersCount / usersPerPage)
 
     return (
@@ -597,7 +590,6 @@ export default function AdminDashboard() {
                 { key: "createdAt", label: "Created" },
                 { key: "actions", label: "Actions", className: "text-right" },
               ]}
-              // The data is now just the users state, which is already paginated by the API call
               data={users}
               renderCell={(user, column) => {
                 switch (column.key) {
@@ -656,14 +648,17 @@ export default function AdminDashboard() {
               }}
             />
 
+            {/* User Pagination */}
             {totalUsersPages > 1 && (
-              <Pagination
-                currentPage={usersCurrentPage}
-                totalPages={totalUsersPages}
-                onPageChange={setUsersCurrentPage}
-                itemsPerPage={usersPerPage}
-                totalItems={totalUsersCount} // Use the total count for accurate pagination
-              />
+              <div className="flex justify-center">
+                <Pagination
+                  currentPage={usersCurrentPage}
+                  totalPages={totalUsersPages}
+                  onPageChange={setUsersCurrentPage}
+                  itemsPerPage={usersPerPage}
+                  totalItems={totalUsersCount}
+                />
+              </div>
             )}
           </>
         )}
@@ -762,185 +757,179 @@ export default function AdminDashboard() {
       </div>
     )
   }
-// TASK MANAGEMENT
-const renderTaskManagement = () => {
-  // The filtering logic is now handled by the API call in useEffect
-  const totalTasksPages = Math.ceil(totalTasksCount / tasksPerPage)
 
-  return (
-    <div className="space-y-6">
-      <PageHeader title="All Tasks" description="Monitor and manage tasks across all users" />
+  // TASK MANAGEMENT - FIXED VERSION
+  const renderTaskManagement = () => {
+    // Calculate pagination for tasks - use the total count from API
+    const totalTasksPages = Math.ceil(totalTasksCount / tasksPerPage)
 
-      <SearchFilters
-        searchValue={taskSearchTerm}
-        onSearchChange={setTaskSearchTerm}
-        searchPlaceholder="Search tasks..."
-        filters={[
-          {
-            value: taskStatusFilter,
-            onValueChange: setTaskStatusFilter,
-            placeholder: "Filter by status",
-            options: [
-              { value: "all", label: "All Tasks" },
-              { value: "pending", label: "Pending" },
-              { value: "completed", label: "Completed" },
-            ],
-          },
-          {
-            value: taskPriorityFilter,
-            onValueChange: setTaskPriorityFilter,
-            placeholder: "Filter by priority",
-            options: [
-              { value: "all", label: "All Priorities" },
-              { value: "high", label: "High" },
-              { value: "medium", label: "Medium" },
-              { value: "low", label: "Low" },
-            ],
-          },
-        ]}
-      />
+    return (
+      <div className="space-y-6">
+        <PageHeader title="All Tasks" description="Monitor and manage tasks across all users" />
 
-      {tasksError ? (
-        <Card>
-          <CardContent className="flex items-center justify-center p-8">
-            <div className="text-center">
-              <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-2" />
-              <p className="text-destructive mb-2">Failed to load tasks</p>
-              <p className="text-sm text-muted-foreground mb-4">{tasksError}</p>
-              <Button onClick={fetchAllTasks} variant="outline" size="sm">
-                Try Again
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : isLoading && allTasks.length === 0 ? (
-        <Card>
-          <CardContent className="flex items-center justify-center p-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-              <p className="text-muted-foreground">Loading tasks...</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : allTasks.length === 0 && !isLoading ? (
-        // This is the new conditional block for the empty message.
-        // It will render only when there are no tasks and the page is not loading.
-        <div className="text-center py-8">
-          <ClipboardList className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-          <p className="text-muted-foreground">No tasks found</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {taskSearchTerm || taskStatusFilter !== "all" || taskPriorityFilter !== "all"
-              ? "Try adjusting your search filters"
-              : "Tasks will appear here once users create them"}
-          </p>
-        </div>
-      ) : (
-        // This block now only contains the DataTable and Pagination.
-        // It will only render when allTasks has data.
-        <>
-          <DataTable
-            title="Tasks Overview"
-            description="All tasks across the platform"
-            columns={[
-              { key: "title", label: "Task" },
-              { key: "user", label: "User" },
-              { key: "status", label: "Status" },
-              { key: "priority", label: "Priority" },
-              { key: "createdAt", label: "Created" },
-              { key: "actions", label: "Actions", className: "text-right" },
-            ]}
-            data={allTasks}
-            renderCell={(task, column) => {
-              switch (column.key) {
-                case "title":
-                  return <span className="font-medium">{String(task?.title || "Untitled Task")}</span>;
-                case "user":
-                  return <span className="text-sm">{String(task?.user || "Unknown User")}</span>;
-                case "status":
-                  return <StatusBadge status={(task?.status as "pending" | "completed") || "pending"} />;
-                case "priority":
-                  return <StatusBadge status={(task?.priority as "low" | "medium" | "high") || "low"} type="priority" />;
-                case "createdAt":
-                  return <span className="text-sm">{String(task?.createdAt || "Unknown")}</span>;
-                case "actions":
-                  return (
-                    <div className="flex items-center justify-end space-x-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleViewTask(task)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  );
-                default:
-                  return <span></span>;
-              }
-            }}
-          />
+        <SearchFilters
+          searchValue={taskSearchTerm}
+          onSearchChange={setTaskSearchTerm}
+          searchPlaceholder="Search tasks..."
+          filters={[
+            {
+              value: taskStatusFilter,
+              onValueChange: setTaskStatusFilter,
+              placeholder: "Filter by status",
+              options: [
+                { value: "all", label: "All Tasks" },
+                { value: "pending", label: "Pending" },
+                { value: "completed", label: "Completed" },
+              ],
+            },
+            // Temporarily removed priority filter since backend doesn't support it
+            // {
+            //   value: taskPriorityFilter,
+            //   onValueChange: setTaskPriorityFilter,
+            //   placeholder: "Filter by priority",
+            //   options: [
+            //     { value: "all", label: "All Priorities" },
+            //     { value: "high", label: "High" },
+            //     { value: "medium", label: "Medium" },
+            //     { value: "low", label: "Low" },
+            //   ],
+            // },
+          ]}
+        />
 
-          {totalTasksPages > 1 && (
-            <Pagination
-              currentPage={tasksCurrentPage}
-              totalPages={totalTasksPages}
-              onPageChange={setTasksCurrentPage}
-              itemsPerPage={tasksPerPage}
-              totalItems={totalTasksCount}
-            />
-          )}
-        </>
-      )}
-
-      <Dialog open={viewTaskDialog} onOpenChange={setViewTaskDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="font-serif">Task Details</DialogTitle>
-            <DialogDescription>View task information and details</DialogDescription>
-          </DialogHeader>
-          {selectedTask && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Title</Label>
-                <p className="text-sm text-muted-foreground">{selectedTask.title}</p>
+        {tasksError ? (
+          <Card>
+            <CardContent className="flex items-center justify-center p-8">
+              <div className="text-center">
+                <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-2" />
+                <p className="text-destructive mb-2">Failed to load tasks</p>
+                <p className="text-sm text-muted-foreground mb-4">{tasksError}</p>
+                <Button onClick={fetchAllTasks} variant="outline" size="sm">
+                  Try Again
+                </Button>
               </div>
-              {selectedTask.description && (
+            </CardContent>
+          </Card>
+        ) : isLoading && allTasks.length === 0 ? (
+          <Card>
+            <CardContent className="flex items-center justify-center p-8">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                <p className="text-muted-foreground">Loading tasks...</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : allTasks.length === 0 && !isLoading ? (
+          <div className="text-center py-8">
+            <ClipboardList className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-muted-foreground">No tasks found</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {taskSearchTerm || taskStatusFilter !== "all" || taskPriorityFilter !== "all"
+                ? "Try adjusting your search filters"
+                : "Tasks will appear here once users create them"}
+            </p>
+          </div>
+        ) : (
+          <>
+            <DataTable
+              title="Tasks Overview"
+              description="All tasks across the platform"
+              columns={[
+                { key: "title", label: "Task" },
+                { key: "user", label: "User" },
+                { key: "status", label: "Status" },
+                { key: "createdAt", label: "Created" },
+                { key: "actions", label: "Actions", className: "text-right" },
+              ]}
+              data={allTasks}
+              renderCell={(task, column) => {
+                switch (column.key) {
+                  case "title":
+                    return <span className="font-medium">{String(task?.title || "Untitled Task")}</span>;
+                  case "user":
+                    return <span className="text-sm">{String(task?.user?.email || task?.user || "Unknown User")}</span>;
+                  case "status":
+                    return <StatusBadge status={(task?.status as "pending" | "completed") || "pending"} />;
+                  case "createdAt":
+                    return <span className="text-sm">{String(task?.createdAt || "Unknown")}</span>;
+                  case "actions":
+                    return (
+                      <div className="flex items-center justify-end space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleViewTask(task)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  default:
+                    return null
+                }
+              }}
+            />
+
+            {/* Task Pagination */}
+            {totalTasksPages > 1 && (
+              <div className="flex justify-center">
+                <Pagination
+                  currentPage={tasksCurrentPage}
+                  totalPages={totalTasksPages}
+                  onPageChange={setTasksCurrentPage}
+                  itemsPerPage={tasksPerPage}
+                  totalItems={totalTasksCount}
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Task Details Dialog */}
+        <Dialog open={viewTaskDialog} onOpenChange={setViewTaskDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="font-serif">Task Details</DialogTitle>
+              <DialogDescription>View task information and details</DialogDescription>
+            </DialogHeader>
+            {selectedTask && (
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Description</Label>
-                  <p className="text-sm text-muted-foreground">{selectedTask.description}</p>
+                  <Label className="text-sm font-medium">Title</Label>
+                  <p className="text-sm text-muted-foreground">{selectedTask.title}</p>
                 </div>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium">Assigned User</Label>
-                  <p className="text-sm text-muted-foreground">{selectedTask.user}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Status</Label>
-                  <div className="mt-1">
-                    <StatusBadge status={selectedTask.status} />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Priority</Label>
-                  <div className="mt-1">
-                    <StatusBadge status={selectedTask.priority} type="priority" />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Created</Label>
-                  <p className="text-sm text-muted-foreground">{selectedTask.createdAt}</p>
-                </div>
-                {selectedTask.dueDate && (
-                  <div>
-                    <Label className="text-sm font-medium">Due Date</Label>
-                    <p className="text-sm text-muted-foreground">{selectedTask.dueDate}</p>
+                {selectedTask.description && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Description</Label>
+                    <p className="text-sm text-muted-foreground">{selectedTask.description}</p>
                   </div>
                 )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium">Assigned User</Label>
+                    <p className="text-sm text-muted-foreground">{(selectedTask.user as any)?.email || selectedTask.user}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Status</Label>
+                    <div className="mt-1">
+                      <StatusBadge status={selectedTask.status} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Created</Label>
+                    <p className="text-sm text-muted-foreground">{selectedTask.createdAt}</p>
+                  </div>
+                  {selectedTask.dueDate && (
+                    <div>
+                      <Label className="text-sm font-medium">Due Date</Label>
+                      <p className="text-sm text-muted-foreground">{selectedTask.dueDate}</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+    )
+  }
+
   const renderContent = () => {
     switch (activeSection) {
       case "overview":
