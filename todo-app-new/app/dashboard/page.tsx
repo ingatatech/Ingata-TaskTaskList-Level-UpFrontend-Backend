@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { PageHeader } from "@/components/page-header"
 import { StatsGrid } from "@/components/stats-grid"
@@ -35,6 +35,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Plus, Edit, Trash2, CheckCircle2, Clock, AlertCircle, Calendar, Eye } from "lucide-react"
 import { Pagination } from "@/components/pagination"
+import { taskAPI } from "@/lib/api"
+import { useAuth } from "@/hooks/use-auth"
+import { useToast } from "@/hooks/use-toast"
+import type { Task } from "@/lib/types"
 
 export default function UserDashboard() {
   const [activeSection, setActiveSection] = useState("tasks")
@@ -44,107 +48,163 @@ export default function UserDashboard() {
   const [currentPage, setCurrentPage] = useState(1)
   const [tasksPerPage] = useState(5)
 
-  const [tasks, setTasks] = useState([
-    {
-      id: 1,
-      title: "Complete project proposal",
-      description: "Write and submit the Q1 project proposal for the new client",
-      status: "completed",
-      priority: "high",
-      createdAt: "2024-02-15",
-      dueDate: "2024-02-20",
-    },
-    {
-      id: 2,
-      title: "Review design mockups",
-      description: "Review the latest UI/UX mockups from the design team",
-      status: "pending",
-      priority: "medium",
-      createdAt: "2024-02-14",
-      dueDate: "2024-02-18",
-    },
-    {
-      id: 3,
-      title: "Update documentation",
-      description: "Update the API documentation with new endpoints",
-      status: "pending",
-      priority: "low",
-      createdAt: "2024-02-13",
-      dueDate: "2024-02-25",
-    },
-    {
-      id: 4,
-      title: "Team meeting preparation",
-      description: "Prepare agenda and materials for weekly team meeting",
-      status: "completed",
-      priority: "medium",
-      createdAt: "2024-02-12",
-      dueDate: "2024-02-16",
-    },
-  ])
+  const [isLoading, setIsLoading] = useState(false)
+  const [tasks, setTasks] = useState<Task[]>([])
+  const { user, logout } = useAuth()
+  const { toast } = useToast()
 
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
-    priority: "",
+    status: "pending" as "pending" | "completed",
+    priority: "medium" as "low" | "medium" | "high",
     dueDate: "",
   })
 
-  const [editTask, setEditTask] = useState({
+  const [editTask, setEditTask] = useState<Partial<Task>>({
     id: 0,
     title: "",
     description: "",
-    status: "",
-    priority: "",
+    status: "pending" as "pending" | "completed",
+    priority: "medium" as "low" | "medium" | "high",
     dueDate: "",
   })
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
-  const [viewTask, setViewTask] = useState<any>(null)
+  const [viewTask, setViewTask] = useState<Task | null>(null)
 
-  const handleCreateTask = () => {
+  useEffect(() => {
+    if (user?.role === "user") {
+      fetchTasks()
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (user?.role === "user") {
+      fetchTasks()
+    }
+  }, [currentPage, searchTerm, filterStatus])
+
+  const fetchTasks = async () => {
+    try {
+      setIsLoading(true)
+      const response = await taskAPI.getTasks(currentPage, tasksPerPage, {
+        title: searchTerm,
+        status: filterStatus === "all" ? undefined : filterStatus,
+      })
+      if (response && Array.isArray(response)) {
+        setTasks(response)
+      } else if (response && typeof response === "object" && "data" in response) {
+        setTasks((response as any).data || [])
+      } else {
+        setTasks([])
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch tasks",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreateTask = async () => {
     if (!newTask.title.trim()) return
 
-    const task = {
-      id: Math.max(...tasks.map((t) => t.id)) + 1,
-      title: newTask.title,
-      description: newTask.description,
-      status: "pending",
-      priority: newTask.priority || "medium",
-      createdAt: new Date().toISOString().split("T")[0],
-      dueDate: newTask.dueDate,
+    try {
+      setIsLoading(true)
+      await taskAPI.createTask(newTask.title, newTask.description)
+
+      setNewTask({ title: "", description: "", priority: "medium", dueDate: "", status: "pending" })
+      setIsCreateDialogOpen(false)
+
+      toast({
+        title: "Task Created",
+        description: "Your task has been created successfully.",
+      })
+
+      fetchTasks()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create task",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
-
-    setTasks([...tasks, task])
-    setNewTask({ title: "", description: "", priority: "", dueDate: "" })
-    setIsCreateDialogOpen(false)
   }
 
-  const handleEditTask = () => {
-    setTasks(tasks.map((task) => (task.id === editTask.id ? { ...task, ...editTask } : task)))
-    setIsEditDialogOpen(false)
+  const handleEditTask = async () => {
+    if (!editTask.id) return
+
+    try {
+      setIsLoading(true)
+      await taskAPI.updateTask(editTask.id.toString(), {
+        title: editTask.title,
+        description: editTask.description,
+        status: editTask.status as "pending" | "completed",
+      })
+
+      setIsEditDialogOpen(false)
+
+      toast({
+        title: "Task Updated",
+        description: "Your task has been updated successfully.",
+      })
+
+      fetchTasks()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update task",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleDeleteTask = (taskId: number) => {
-    setTasks(tasks.filter((task) => task.id !== taskId))
+  const handleDeleteTask = async (taskId: number) => {
+    try {
+      setIsLoading(true)
+      await taskAPI.deleteTask(taskId.toString())
+
+      toast({
+        title: "Task Deleted",
+        description: "Your task has been deleted successfully.",
+      })
+
+      fetchTasks()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete task",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const openEditDialog = (task: any) => {
+  const openEditDialog = (task: Task) => {
     setEditTask(task)
     setIsEditDialogOpen(true)
   }
 
-  const openViewDialog = (task: any) => {
+  const openViewDialog = (task: Task) => {
     setViewTask(task)
     setIsViewDialogOpen(true)
   }
 
   const taskStats = {
     total: tasks.length,
-    completed: tasks.filter((t) => t.status === "completed").length,
-    pending: tasks.filter((t) => t.status === "pending").length,
+    completed: tasks.filter((t: Task) => t.status === "completed").length,
+    pending: tasks.filter((t: Task) => t.status === "pending").length,
     overdue: 1, // Mock overdue count
   }
 
@@ -172,7 +232,7 @@ export default function UserDashboard() {
   ]
 
   const renderTaskManagement = () => {
-    const filteredTasks = tasks.filter((task) => {
+    const filteredTasks = tasks.filter((task: Task) => {
       const matchesSearch =
         task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -225,10 +285,29 @@ export default function UserDashboard() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
+                        <Label htmlFor="task-status">Status</Label>
+                        <Select
+                          value={newTask.status}
+                          onValueChange={(value: string) =>
+                            setNewTask({ ...newTask, status: value as "pending" | "completed" })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
                         <Label htmlFor="task-priority">Priority</Label>
                         <Select
                           value={newTask.priority}
-                          onValueChange={(value) => setNewTask({ ...newTask, priority: value })}
+                          onValueChange={(value: string) =>
+                            setNewTask({ ...newTask, priority: value as "low" | "medium" | "high" })
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select priority" />
@@ -301,14 +380,14 @@ export default function UserDashboard() {
                   </div>
                 )
               case "status":
-                return <StatusBadge status={task.status} />
+                return <StatusBadge status={task.status as any} />
               case "priority":
-                return <StatusBadge status={task.priority} type="priority" />
+                return task.priority ? <StatusBadge status={task.priority as any} type="priority" /> : <span>-</span>
               case "dueDate":
                 return (
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span>{task.dueDate}</span>
+                    <span>{task.dueDate || "-"}</span>
                   </div>
                 )
               case "actions":
@@ -399,7 +478,12 @@ export default function UserDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Status</Label>
-                  <Select value={newTask.status} onValueChange={(value) => setNewTask({ ...newTask, status: value })}>
+                  <Select
+                    value={newTask.status}
+                    onValueChange={(value: string) =>
+                      setNewTask({ ...newTask, status: value as "pending" | "completed" })
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -413,7 +497,9 @@ export default function UserDashboard() {
                   <Label>Priority</Label>
                   <Select
                     value={newTask.priority}
-                    onValueChange={(value) => setNewTask({ ...newTask, priority: value })}
+                    onValueChange={(value: string) =>
+                      setNewTask({ ...newTask, priority: value as "low" | "medium" | "high" })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -464,7 +550,9 @@ export default function UserDashboard() {
                   <Label>Status</Label>
                   <Select
                     value={editTask.status}
-                    onValueChange={(value) => setEditTask({ ...editTask, status: value })}
+                    onValueChange={(value: string) =>
+                      setEditTask({ ...editTask, status: value as "pending" | "completed" })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -479,7 +567,9 @@ export default function UserDashboard() {
                   <Label>Priority</Label>
                   <Select
                     value={editTask.priority}
-                    onValueChange={(value) => setEditTask({ ...editTask, priority: value })}
+                    onValueChange={(value: string) =>
+                      setEditTask({ ...editTask, priority: value as "low" | "medium" | "high" })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -522,7 +612,7 @@ export default function UserDashboard() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-muted-foreground">Status</Label>
-                    <StatusBadge status={viewTask.status} />
+                    <StatusBadge status={viewTask.status as any} />
                   </div>
                 </div>
 
@@ -534,20 +624,24 @@ export default function UserDashboard() {
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-muted-foreground">Priority</Label>
-                    <StatusBadge status={viewTask.priority} type="priority" />
+                    {viewTask.priority ? (
+                      <StatusBadge status={viewTask.priority as any} type="priority" />
+                    ) : (
+                      <span>-</span>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-muted-foreground">Created Date</Label>
                     <div className="flex items-center space-x-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{viewTask.createdAt}</span>
+                      <span className="text-sm">{viewTask.createdAt || "-"}</span>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-muted-foreground">Due Date</Label>
                     <div className="flex items-center space-x-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{viewTask.dueDate}</span>
+                      <span className="text-sm">{viewTask.dueDate || "-"}</span>
                     </div>
                   </div>
                 </div>

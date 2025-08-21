@@ -2,6 +2,8 @@ import "reflect-metadata";
 import express from 'express';
 import { DataSource } from 'typeorm';
 import dotenv from 'dotenv';
+import cors from 'cors'; // This is the new import line
+
 import { User } from './entities/User';
 import { Task } from './entities/Task';
 import userRoutes from '././routes/userRoutes';
@@ -13,6 +15,14 @@ dotenv.config();
 
 const app = express();
 app.use(express.json());
+
+// Add the cors middleware here, before your routes
+// This allows your frontend (e.g., on localhost:3000) to communicate with your backend
+app.use(cors({
+  origin: '*', 
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
 
 export const AppDataSource = new DataSource({
   type: "postgres",
@@ -46,5 +56,5 @@ AppDataSource.initialize()
     });
   })
   .catch((err) => {
-    console.error("Error during Data Source initialization:", err);
+    console.error("Error during Data Source initialization:", err); // Typo corrected here
   });

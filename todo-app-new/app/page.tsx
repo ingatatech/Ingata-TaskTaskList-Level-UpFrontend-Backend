@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,16 +10,49 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, Users, ClipboardList, Shield, Mail, Key, ArrowRight, Star, Zap } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState("login")
   const [loginForm, setLoginForm] = useState({ email: "", password: "" })
-  const [otpForm, setOtpForm] = useState({ otp: "", newPassword: "", confirmPassword: "" })
+  const [otpForm, setOtpForm] = useState({ email: "", otp: "", newPassword: "", confirmPassword: "" })
+
+  const { login, verifyOtp, isLoading } = useAuth()
 
   const scrollToAuth = () => {
     const authSection = document.getElementById("auth-section")
     if (authSection) {
       authSection.scrollIntoView({ behavior: "smooth" })
+    }
+  }
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!loginForm.email || !loginForm.password) return
+
+    try {
+      await login(loginForm.email, loginForm.password)
+    } catch (error) {
+      // Error is handled by the useAuth hook with toast
+    }
+  }
+
+  const handleOtpVerification = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!otpForm.email || !otpForm.otp || !otpForm.newPassword) return
+
+    if (otpForm.newPassword !== otpForm.confirmPassword) {
+      // You could add a toast here for password mismatch
+      return
+    }
+
+    try {
+      await verifyOtp(otpForm.email, otpForm.otp, otpForm.newPassword)
+      // Reset form and switch to login tab
+      setOtpForm({ email: "", otp: "", newPassword: "", confirmPassword: "" })
+      setActiveTab("login")
+    } catch (error) {
+      // Error is handled by the useAuth hook with toast
     }
   }
 
@@ -151,86 +186,108 @@ export default function HomePage() {
                 </TabsList>
 
                 <TabsContent value="login" className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="font-medium">
-                      Email Address
-                    </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="Enter your email"
-                        className="pl-10 h-11"
-                        value={loginForm.email}
-                        onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                      />
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="email" className="font-medium">
+                        Email Address
+                      </Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="Enter your email"
+                          className="pl-10 h-11"
+                          value={loginForm.email}
+                          onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password" className="font-medium">
-                      Password
-                    </Label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="Enter your password"
-                        className="pl-10 h-11"
-                        value={loginForm.password}
-                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                      />
+                    <div className="space-y-2">
+                      <Label htmlFor="password" className="font-medium">
+                        Password
+                      </Label>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="password"
+                          type="password"
+                          placeholder="Enter your password"
+                          className="pl-10 h-11"
+                          value={loginForm.password}
+                          onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <Button className="w-full font-medium h-11 mt-6">Sign In</Button>
-                  <p className="text-sm text-center text-muted-foreground mt-4">
-                    New user? Check your email for OTP verification
-                  </p>
+                    <Button type="submit" className="w-full font-medium h-11 mt-6" disabled={isLoading}>
+                      {isLoading ? "Signing In..." : "Sign In"}
+                    </Button>
+                    <p className="text-sm text-center text-muted-foreground mt-4">
+                      New user? Check your email for OTP verification
+                    </p>
+                  </form>
                 </TabsContent>
 
                 <TabsContent value="otp" className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="otp" className="font-medium">
-                      Verification Code
-                    </Label>
-                    <Input
-                      id="otp"
-                      type="text"
-                      placeholder="Enter 6-digit OTP"
-                      className="text-center text-lg tracking-widest h-11"
-                      maxLength={6}
-                      value={otpForm.otp}
-                      onChange={(e) => setOtpForm({ ...otpForm, otp: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password" className="font-medium">
-                      Set New Password
-                    </Label>
-                    <Input
-                      id="new-password"
-                      type="password"
-                      placeholder="Create a secure password"
-                      className="h-11"
-                      value={otpForm.newPassword}
-                      onChange={(e) => setOtpForm({ ...otpForm, newPassword: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password" className="font-medium">
-                      Confirm Password
-                    </Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      placeholder="Confirm your password"
-                      className="h-11"
-                      value={otpForm.confirmPassword}
-                      onChange={(e) => setOtpForm({ ...otpForm, confirmPassword: e.target.value })}
-                    />
-                  </div>
-                  <Button className="w-full font-medium h-11 mt-6">Verify & Set Password</Button>
+                  <form onSubmit={handleOtpVerification} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="otp-email" className="font-medium">
+                        Email Address
+                      </Label>
+                      <Input
+                        id="otp-email"
+                        type="email"
+                        placeholder="Enter your email"
+                        className="h-11"
+                        value={otpForm.email}
+                        onChange={(e) => setOtpForm({ ...otpForm, email: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="otp" className="font-medium">
+                        Verification Code
+                      </Label>
+                      <Input
+                        id="otp"
+                        type="text"
+                        placeholder="Enter 6-digit OTP"
+                        className="text-center text-lg tracking-widest h-11"
+                        maxLength={6}
+                        value={otpForm.otp}
+                        onChange={(e) => setOtpForm({ ...otpForm, otp: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-password" className="font-medium">
+                        Set New Password
+                      </Label>
+                      <Input
+                        id="new-password"
+                        type="password"
+                        placeholder="Create a secure password"
+                        className="h-11"
+                        value={otpForm.newPassword}
+                        onChange={(e) => setOtpForm({ ...otpForm, newPassword: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password" className="font-medium">
+                        Confirm Password
+                      </Label>
+                      <Input
+                        id="confirm-password"
+                        type="password"
+                        placeholder="Confirm your password"
+                        className="h-11"
+                        value={otpForm.confirmPassword}
+                        onChange={(e) => setOtpForm({ ...otpForm, confirmPassword: e.target.value })}
+                      />
+                    </div>
+                    <Button type="submit" className="w-full font-medium h-11 mt-6" disabled={isLoading}>
+                      {isLoading ? "Verifying..." : "Verify & Set Password"}
+                    </Button>
+                  </form>
                 </TabsContent>
               </Tabs>
             </CardContent>

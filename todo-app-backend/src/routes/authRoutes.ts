@@ -46,7 +46,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
   }
 });
 
-// New endpoint for user login
+// Updated endpoint for user login to return the user's role
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -72,8 +72,8 @@ router.post('/login', async (req: Request, res: Response) => {
     // If credentials are valid, generate a JWT token
     const token = generateToken(user);
 
-    // Return the token to the client
-    res.status(200).json({ message: 'Login successful.', token });
+    // Return the token AND the user's role to the client
+    res.status(200).json({ message: 'Login successful.', token, role: user.role });
 
   } catch (error) {
     const errorMessage = (error as Error).message;

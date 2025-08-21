@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { PageHeader } from "@/components/page-header"
 import { StatsGrid } from "@/components/stats-grid"
@@ -32,8 +32,43 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Users, ClipboardList, UserPlus, Mail, Edit, Trash2, Eye, TrendingUp, CheckCircle2, Clock } from "lucide-react"
+import { Users, ClipboardList, UserPlus, Mail, Edit, Trash2, Eye, TrendingUp, CheckCircle2, Clock, AlertTriangle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { userAPI, adminTaskAPI } from "@/lib/api"
+import { useAuth } from "@/hooks/use-auth"
+
+// These interfaces define the shape of your data.
+// They are unchanged from your original code.
+interface User {
+  id: number | string
+  name?: string | null
+  email: string
+  role: "admin" | "user"
+  status: "active" | "inactive"
+  tasks: number
+  createdAt: string
+}
+
+interface Task {
+  id: number | string
+  title: string
+  description?: string | null
+  status: "pending" | "completed"
+  priority: "low" | "medium" | "high"
+  user: string
+  createdAt: string
+  dueDate?: string | null
+}
+
+// This interface is an assumption about the API response structure.
+// We are assuming the API will return a list of data and a total count.
+interface PaginatedApiResponse<T> {
+  data?: T[]
+  tasks?: T[] // Add this for task-specific responses
+  totalItems?: number
+  message?: string
+  success?: boolean
+}
 
 export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("overview")
@@ -51,208 +86,172 @@ export default function AdminDashboard() {
   const [editUserDialog, setEditUserDialog] = useState(false)
   const [viewUserDialog, setViewUserDialog] = useState(false)
   const [viewTaskDialog, setViewTaskDialog] = useState(false)
-  const [selectedUser, setSelectedUser] = useState(null)
-  const [selectedTask, setSelectedTask] = useState(null)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [editUserName, setEditUserName] = useState("")
   const [editUserEmail, setEditUserEmail] = useState("")
   const [editUserRole, setEditUserRole] = useState("")
   const [editUserStatus, setEditUserStatus] = useState("")
 
+  // State to hold users for the current page
+  const [users, setUsers] = useState<User[]>([])
+  // State to hold tasks for the current page
+  const [allTasks, setAllTasks] = useState<Task[]>([])
+
+  // New state to hold the total count for all users and tasks
+  const [totalUsersCount, setTotalUsersCount] = useState(0)
+  const [totalTasksCount, setTotalTasksCount] = useState(0)
+  
+  // Pagination state for users
   const [usersCurrentPage, setUsersCurrentPage] = useState(1)
   const [usersPerPage] = useState(5)
 
+  // Pagination state for tasks
   const [tasksCurrentPage, setTasksCurrentPage] = useState(1)
   const [tasksPerPage] = useState(5)
 
+  // Add error states
+  const [usersError, setUsersError] = useState<string | null>(null)
+  const [tasksError, setTasksError] = useState<string | null>(null)
+
   const { toast } = useToast()
+  const { user, logout } = useAuth()
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Mock data
-  const [users, setUsers] = useState([
-    {
-      id: 1,
-      name: "John Doe",
-      email: "john@example.com",
-      status: "active",
-      role: "user",
-      tasks: 12,
-      createdAt: "2024-01-15",
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      email: "jane@example.com",
-      status: "active",
-      role: "user",
-      tasks: 8,
-      createdAt: "2024-01-20",
-    },
-    {
-      id: 3,
-      name: "Mike Johnson",
-      email: "mike@example.com",
-      status: "inactive",
-      role: "user",
-      tasks: 3,
-      createdAt: "2024-02-01",
-    },
-    {
-      id: 4,
-      name: "Sarah Wilson",
-      email: "sarah@example.com",
-      status: "active",
-      role: "user",
-      tasks: 15,
-      createdAt: "2024-02-05",
-    },
-    {
-      id: 5,
-      name: "David Brown",
-      email: "david@example.com",
-      status: "active",
-      role: "user",
-      tasks: 7,
-      createdAt: "2024-02-08",
-    },
-    {
-      id: 6,
-      name: "Emily Davis",
-      email: "emily@example.com",
-      status: "inactive",
-      role: "user",
-      tasks: 4,
-      createdAt: "2024-02-10",
-    },
-    {
-      id: 7,
-      name: "Alex Martinez",
-      email: "alex@example.com",
-      status: "active",
-      role: "user",
-      tasks: 11,
-      createdAt: "2024-02-12",
-    },
-    {
-      id: 8,
-      name: "Lisa Anderson",
-      email: "lisa@example.com",
-      status: "active",
-      role: "user",
-      tasks: 9,
-      createdAt: "2024-02-14",
-    },
-  ])
-
-  const allTasks = [
-    {
-      id: 1,
-      title: "Complete project proposal",
-      user: "John Doe",
-      status: "completed",
-      priority: "high",
-      createdAt: "2024-02-15",
-    },
-    {
-      id: 2,
-      title: "Review design mockups",
-      user: "Jane Smith",
-      status: "pending",
-      priority: "medium",
-      createdAt: "2024-02-14",
-    },
-    {
-      id: 3,
-      title: "Update documentation",
-      user: "Mike Johnson",
-      status: "pending",
-      priority: "low",
-      createdAt: "2024-02-13",
-    },
-    {
-      id: 4,
-      title: "Implement user authentication",
-      user: "Sarah Wilson",
-      status: "pending",
-      priority: "high",
-      createdAt: "2024-02-12",
-    },
-    {
-      id: 5,
-      title: "Create database schema",
-      user: "David Brown",
-      status: "completed",
-      priority: "medium",
-      createdAt: "2024-02-11",
-    },
-    {
-      id: 6,
-      title: "Design landing page",
-      user: "Emily Davis",
-      status: "pending",
-      priority: "low",
-      createdAt: "2024-02-10",
-    },
-    {
-      id: 7,
-      title: "Setup CI/CD pipeline",
-      user: "Alex Martinez",
-      status: "completed",
-      priority: "high",
-      createdAt: "2024-02-09",
-    },
-    {
-      id: 8,
-      title: "Write unit tests",
-      user: "Lisa Anderson",
-      status: "pending",
-      priority: "medium",
-      createdAt: "2024-02-08",
-    },
-  ]
-
-  const handleViewUser = (user) => {
-    setSelectedUser(user)
-    setViewUserDialog(true)
+  /**
+   * Fetches users from the API with pagination, search, and filtering.
+   * This function now expects the API to return a total count of items.
+   */
+  const fetchUsers = async () => {
+    setIsLoading(true)
+    setUsersError(null)
+    try {
+      const response = (await userAPI.getUsers(usersCurrentPage, usersPerPage, {
+        email: searchTerm,
+        status: filterStatus === "all" ? undefined : filterStatus,
+      })) as unknown as PaginatedApiResponse<User>
+      
+      // Check if response is valid
+      if (!response) {
+        throw new Error("No response from server")
+      }
+      
+      // Update users state with the data from the current page
+      setUsers(Array.isArray(response.data) ? response.data : [])
+      // Update the total users count from the API response
+      setTotalUsersCount(response.totalItems || 0)
+    } catch (error) {
+      console.error("Failed to fetch users:", error)
+      setUsersError(error instanceof Error ? error.message : "Failed to fetch users")
+      setUsers([])
+      setTotalUsersCount(0)
+      toast({
+        title: "Error",
+        description: "Failed to fetch users. Please check your connection and try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleEditUser = (user) => {
-    setSelectedUser(user)
-    setEditUserName(user.name)
-    setEditUserEmail(user.email)
-    setEditUserRole(user.role)
-    setEditUserStatus(user.status)
-    setEditUserDialog(true)
+  /**
+   * Fetches all tasks from the API with pagination, search, and filtering.
+   * This function now expects the API to return a total count of items.
+   */
+  const fetchAllTasks = async () => {
+    setIsLoading(true)
+    setTasksError(null)
+    try {
+      const filters = {
+        title: taskSearchTerm || undefined,
+        status: taskStatusFilter === "all" ? undefined : taskStatusFilter,
+        priority: taskPriorityFilter === "all" ? undefined : taskPriorityFilter,
+      };
+
+      console.log("Fetching tasks with filters:", filters) // Debug log
+
+      const response = (await adminTaskAPI.getAllTasks(tasksCurrentPage, tasksPerPage, filters)) as unknown as PaginatedApiResponse<Task> | Task[]
+      
+      console.log("Tasks API response:", response) // Debug log
+      
+      // Check if response is valid
+      if (!response) {
+        throw new Error("No response from server")
+      }
+      
+      // Handle different response formats
+      let tasks: Task[] = []
+      let totalCount = 0
+      
+      if (Array.isArray(response)) {
+        // If response is directly an array
+        tasks = response
+        totalCount = response.length
+      } else if (response.data && Array.isArray(response.data)) {
+        // If response has a data property with array
+        tasks = response.data
+        totalCount = response.totalItems || response.data.length
+      } else if (response.tasks && Array.isArray(response.tasks)) {
+        // If response has a tasks property with array
+        tasks = response.tasks
+        totalCount = response.totalItems || response.tasks.length
+      } else {
+        // Handle any other response format
+        console.warn("Unexpected response format:", response)
+        tasks = []
+        totalCount = 0
+      }
+      
+      // Update tasks state with the data from the current page
+      setAllTasks(tasks)
+      // Update the total tasks count from the API response
+      setTotalTasksCount(totalCount)
+      
+      console.log("Set tasks:", tasks.length, "Total count:", totalCount) // Debug log
+      
+    } catch (error) {
+      console.error("Failed to fetch tasks:", error)
+      setTasksError(error instanceof Error ? error.message : "Failed to fetch tasks")
+      setAllTasks([])
+      setTotalTasksCount(0)
+      toast({
+        title: "Error",
+        description: "Failed to fetch tasks. Please check your connection and try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleUpdateUser = () => {
-    setUsers(
-      users.map((user) =>
-        user.id === selectedUser.id
-          ? { ...user, name: editUserName, email: editUserEmail, role: editUserRole, status: editUserStatus }
-          : user,
-      ),
-    )
-    setEditUserDialog(false)
-    toast({
-      title: "User Updated",
-      description: "User information has been successfully updated.",
-    })
-  }
+  // Effect hook to fetch users whenever pagination, search, or filters change.
+  useEffect(() => {
+    if (user?.role === "admin" && (activeSection === "overview" || activeSection === "users")) {
+      fetchUsers()
+    }
+  }, [user, usersCurrentPage, searchTerm, filterStatus, activeSection])
 
-  const handleDeleteUser = (userId) => {
-    setUsers(users.filter((user) => user.id !== userId))
-    toast({
-      title: "User Deleted",
-      description: "User has been successfully removed from the system.",
-      variant: "destructive",
-    })
-  }
+  // Effect hook to fetch tasks whenever pagination, search, or filters change.
+  useEffect(() => {
+    if (user?.role === "admin" && (activeSection === "overview" || activeSection === "tasks")) {
+      fetchAllTasks()
+    }
+  }, [user, tasksCurrentPage, taskSearchTerm, taskStatusFilter, taskPriorityFilter, activeSection])
 
-  const handleViewTask = (task) => {
-    setSelectedTask(task)
-    setViewTaskDialog(true)
-  }
+  // Reset pagination when switching sections
+  useEffect(() => {
+    setUsersCurrentPage(1)
+    setTasksCurrentPage(1)
+    setSearchTerm("")
+    setFilterStatus("all")
+    setTaskSearchTerm("")
+    setTaskStatusFilter("all")
+    setTaskPriorityFilter("all")
+  }, [activeSection])
 
-  const handleAddUser = () => {
+  // No change to other functions, they remain the same.
+  const handleAddUser = async () => {
     if (!newUserName || !newUserEmail || !newUserRole) {
       toast({
         title: "Error",
@@ -262,33 +261,119 @@ export default function AdminDashboard() {
       return
     }
 
-    const newUser = {
-      id: users.length + 1,
-      name: newUserName,
-      email: newUserEmail,
-      status: "active",
-      role: newUserRole,
-      tasks: 0,
-      createdAt: new Date().toISOString().split("T")[0],
+    try {
+      setIsLoading(true)
+      await userAPI.createUser(newUserEmail, newUserRole as "admin" | "user")
+
+      setNewUserName("")
+      setNewUserEmail("")
+      setNewUserRole("")
+
+      toast({
+        title: "User Added",
+        description: "OTP invitation sent successfully. User will receive login credentials via email.",
+      })
+
+      // Refresh users list after adding a new user
+      fetchUsers()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create user",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
-
-    setUsers([...users, newUser])
-    setNewUserName("")
-    setNewUserEmail("")
-    setNewUserRole("")
-
-    toast({
-      title: "User Added",
-      description: "OTP invitation sent successfully. User will receive login credentials via email.",
-    })
   }
 
+  const handleUpdateUser = async () => {
+    if (!selectedUser || !selectedUser.id) {
+      toast({
+        title: "Error",
+        description: "No user selected for update",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      await userAPI.updateUser(String(selectedUser.id), {
+        email: editUserEmail,
+        role: editUserRole as "admin" | "user",
+        status: editUserStatus as "active" | "inactive",
+      })
+
+      setEditUserDialog(false)
+      toast({
+        title: "User Updated",
+        description: "User information has been successfully updated.",
+      })
+
+      // Refresh users list after updating a user
+      fetchUsers()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update user",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDeleteUser = async (userId: number) => {
+    try {
+      setIsLoading(true)
+      await userAPI.deleteUser(String(userId))
+
+      toast({
+        title: "User Deleted",
+        description: "User has been successfully removed from the system.",
+        variant: "destructive",
+      })
+
+      // Refresh users list after deleting a user
+      fetchUsers()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete user",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleViewUser = (user: User) => {
+    setSelectedUser(user)
+    setViewUserDialog(true)
+  }
+
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user)
+    setEditUserName(user.name ?? "")
+    setEditUserEmail(user.email)
+    setEditUserRole(user.role)
+    setEditUserStatus(user.status)
+    setEditUserDialog(true)
+  }
+
+  const handleViewTask = (task: Task) => {
+    setSelectedTask(task)
+    setViewTaskDialog(true)
+  }
+
+  // These stats now use the total counts fetched from the API
   const stats = {
-    totalUsers: users.length,
-    activeUsers: users.filter((u) => u.status === "active").length,
-    totalTasks: 1247,
-    completedTasks: 892,
-    pendingTasks: 355,
+    totalUsers: totalUsersCount || 0,
+    activeUsers: users.filter((u) => u && u.status === "active").length || 0,
+    totalTasks: totalTasksCount || 0,
+    completedTasks: allTasks.filter((t) => t && t.status === "completed").length || 0,
+    pendingTasks: allTasks.filter((t) => t && t.status === "pending").length || 0,
   }
 
   const overviewStats = [
@@ -312,7 +397,7 @@ export default function AdminDashboard() {
     },
     {
       title: "Completion Rate",
-      value: "71.5%",
+      value: stats.totalTasks > 0 ? `${Math.round((stats.completedTasks / stats.totalTasks) * 100)}%` : "0%",
       icon: <CheckCircle2 className="h-4 w-4 text-muted-foreground" />,
       trend: "+5%",
     },
@@ -332,17 +417,27 @@ export default function AdminDashboard() {
             <CardDescription>Latest user registrations</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {users.slice(0, 3).map((user) => (
-                <div key={user.id} className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{user.name}</p>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
+            {usersError ? (
+              <div className="flex items-center justify-center p-4 text-destructive">
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                <span>Failed to load users</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {users.slice(0, 3).map((user) => (
+                  <div key={user?.id || Math.random()} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{user?.name || "Unknown User"}</p>
+                      <p className="text-sm text-muted-foreground">{user?.email || "No email"}</p>
+                    </div>
+                    <StatusBadge status={(user?.status as "active" | "inactive") || "inactive"} />
                   </div>
-                  <StatusBadge status={user.status} />
-                </div>
-              ))}
-            </div>
+                ))}
+                {users.length === 0 && !isLoading && (
+                  <p className="text-center text-muted-foreground py-4">No users found</p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -352,22 +447,29 @@ export default function AdminDashboard() {
             <CardDescription>Current task distribution</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                  <span>Completed</span>
-                </div>
-                <span className="font-medium">{stats.completedTasks}</span>
+            {tasksError ? (
+              <div className="flex items-center justify-center p-4 text-destructive">
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                <span>Failed to load tasks</span>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-secondary" />
-                  <span>Pending</span>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle2 className="h-4 w-4 text-primary" />
+                    <span>Completed</span>
+                  </div>
+                  <span className="font-medium">{stats.completedTasks}</span>
                 </div>
-                <span className="font-medium">{stats.pendingTasks}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="h-4 w-4 text-secondary" />
+                    <span>Pending</span>
+                  </div>
+                  <span className="font-medium">{stats.pendingTasks}</span>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -375,16 +477,8 @@ export default function AdminDashboard() {
   )
 
   const renderUserManagement = () => {
-    const filteredUsers = users.filter((user) => {
-      const matchesSearch =
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesStatus = filterStatus === "all" || user.status === filterStatus
-      return matchesSearch && matchesStatus
-    })
-
-    const totalUsersPages = Math.ceil(filteredUsers.length / usersPerPage)
-    const paginatedUsers = filteredUsers.slice((usersCurrentPage - 1) * usersPerPage, usersCurrentPage * usersPerPage)
+    // The filtering logic is now handled by the API call in useEffect
+    const totalUsersPages = Math.ceil(totalUsersCount / usersPerPage)
 
     return (
       <div className="space-y-6">
@@ -423,6 +517,7 @@ export default function AdminDashboard() {
                         id="user-email"
                         type="email"
                         placeholder="Enter email address"
+                        className="pl-10 h-11"
                         value={newUserEmail}
                         onChange={(e) => setNewUserEmail(e.target.value)}
                       />
@@ -439,9 +534,9 @@ export default function AdminDashboard() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button onClick={handleAddUser} className="w-full font-medium">
+                    <Button onClick={handleAddUser} className="w-full font-medium" disabled={isLoading}>
                       <Mail className="h-4 w-4 mr-2" />
-                      Send OTP Invitation
+                      {isLoading ? "Sending..." : "Send OTP Invitation"}
                     </Button>
                   </div>
                 </DialogContent>
@@ -453,7 +548,7 @@ export default function AdminDashboard() {
         <SearchFilters
           searchValue={searchTerm}
           onSearchChange={setSearchTerm}
-          searchPlaceholder="Search users..."
+          searchPlaceholder="Search users by email or role..."
           filters={[
             {
               value: filterStatus,
@@ -468,78 +563,110 @@ export default function AdminDashboard() {
           ]}
         />
 
-        <DataTable
-          title="Users"
-          description="Manage user accounts and permissions"
-          columns={[
-            { key: "name", label: "Name" },
-            { key: "email", label: "Email" },
-            { key: "status", label: "Status" },
-            { key: "tasks", label: "Tasks" },
-            { key: "createdAt", label: "Created" },
-            { key: "actions", label: "Actions", className: "text-right" },
-          ]}
-          data={paginatedUsers}
-          renderCell={(user, column) => {
-            switch (column.key) {
-              case "name":
-                return <span className="font-medium">{user.name}</span>
-              case "email":
-                return user.email
-              case "status":
-                return <StatusBadge status={user.status} />
-              case "tasks":
-                return user.tasks
-              case "createdAt":
-                return user.createdAt
-              case "actions":
-                return (
-                  <div className="flex items-center justify-end space-x-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleViewUser(user)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleEditUser(user)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
+        {usersError ? (
+          <Card>
+            <CardContent className="flex items-center justify-center p-8">
+              <div className="text-center">
+                <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-2" />
+                <p className="text-destructive mb-2">Failed to load users</p>
+                <Button onClick={fetchUsers} variant="outline" size="sm">
+                  Try Again
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : isLoading && users.length === 0 ? (
+          <Card>
+            <CardContent className="flex items-center justify-center p-8">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                <p className="text-muted-foreground">Loading users...</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <DataTable
+              title="Users"
+              description="Manage user accounts and permissions"
+              columns={[
+                { key: "email", label: "Email" },
+                { key: "role", label: "Role" },
+                { key: "status", label: "Status" },
+                { key: "tasks", label: "Tasks" },
+                { key: "createdAt", label: "Created" },
+                { key: "actions", label: "Actions", className: "text-right" },
+              ]}
+              // The data is now just the users state, which is already paginated by the API call
+              data={users}
+              renderCell={(user, column) => {
+                switch (column.key) {
+                  case "email":
+                    return <span className="font-medium">{String(user?.email || "No email")}</span>
+                  case "role":
+                    return <span className="capitalize">{String(user?.role || "user")}</span>
+                  case "status":
+                    return <StatusBadge status={(user?.status as "active" | "inactive") || "inactive"} />
+                  case "tasks":
+                    return <span>{String(user?.tasks || 0)}</span>
+                  case "createdAt":
+                    return <span>{String(user?.createdAt || "Unknown")}</span>
+                  case "actions":
+                    return (
+                      <div className="flex items-center justify-end space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleViewUser(user)}>
+                          <Eye className="h-4 w-4" />
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete User</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete {user.name}? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                )
-              default:
-                return null
-            }
-          }}
-        />
+                        <Button variant="ghost" size="sm" onClick={() => handleEditUser(user)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete User</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete {user?.email || "this user"}? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => {
+                                  if (user?.id) {
+                                    handleDeleteUser(user.id)
+                                  }
+                                }}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    )
+                  default:
+                    return <span></span>
+                }
+              }}
+            />
 
-        <Pagination
-          currentPage={usersCurrentPage}
-          totalPages={totalUsersPages}
-          onPageChange={setUsersCurrentPage}
-          itemsPerPage={usersPerPage}
-          totalItems={filteredUsers.length}
-        />
+            {totalUsersPages > 1 && (
+              <Pagination
+                currentPage={usersCurrentPage}
+                totalPages={totalUsersPages}
+                onPageChange={setUsersCurrentPage}
+                itemsPerPage={usersPerPage}
+                totalItems={totalUsersCount} // Use the total count for accurate pagination
+              />
+            )}
+          </>
+        )}
 
         <Dialog open={viewUserDialog} onOpenChange={setViewUserDialog}>
           <DialogContent>
@@ -552,7 +679,7 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm font-medium">Name</Label>
-                    <p className="text-sm text-muted-foreground">{selectedUser.name}</p>
+                    <p className="text-sm text-muted-foreground">{selectedUser.name ?? "Not Available"}</p>
                   </div>
                   <div>
                     <Label className="text-sm font-medium">Email</Label>
@@ -626,8 +753,8 @@ export default function AdminDashboard() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleUpdateUser} className="w-full font-medium">
-                Update User
+              <Button onClick={handleUpdateUser} className="w-full font-medium" disabled={isLoading}>
+                {isLoading ? "Updating..." : "Update User"}
               </Button>
             </div>
           </DialogContent>
@@ -635,139 +762,185 @@ export default function AdminDashboard() {
       </div>
     )
   }
+// TASK MANAGEMENT
+const renderTaskManagement = () => {
+  // The filtering logic is now handled by the API call in useEffect
+  const totalTasksPages = Math.ceil(totalTasksCount / tasksPerPage)
 
-  const renderTaskManagement = () => {
-    const filteredTasks = allTasks.filter((task) => {
-      const matchesSearch =
-        task.title.toLowerCase().includes(taskSearchTerm.toLowerCase()) ||
-        task.user.toLowerCase().includes(taskSearchTerm.toLowerCase())
-      const matchesStatus = taskStatusFilter === "all" || task.status === taskStatusFilter
-      const matchesPriority = taskPriorityFilter === "all" || task.priority === taskPriorityFilter
-      return matchesSearch && matchesStatus && matchesPriority
-    })
+  return (
+    <div className="space-y-6">
+      <PageHeader title="All Tasks" description="Monitor and manage tasks across all users" />
 
-    const totalTasksPages = Math.ceil(filteredTasks.length / tasksPerPage)
-    const paginatedTasks = filteredTasks.slice((tasksCurrentPage - 1) * tasksPerPage, tasksCurrentPage * tasksPerPage)
+      <SearchFilters
+        searchValue={taskSearchTerm}
+        onSearchChange={setTaskSearchTerm}
+        searchPlaceholder="Search tasks..."
+        filters={[
+          {
+            value: taskStatusFilter,
+            onValueChange: setTaskStatusFilter,
+            placeholder: "Filter by status",
+            options: [
+              { value: "all", label: "All Tasks" },
+              { value: "pending", label: "Pending" },
+              { value: "completed", label: "Completed" },
+            ],
+          },
+          {
+            value: taskPriorityFilter,
+            onValueChange: setTaskPriorityFilter,
+            placeholder: "Filter by priority",
+            options: [
+              { value: "all", label: "All Priorities" },
+              { value: "high", label: "High" },
+              { value: "medium", label: "Medium" },
+              { value: "low", label: "Low" },
+            ],
+          },
+        ]}
+      />
 
-    return (
-      <div className="space-y-6">
-        <PageHeader title="All Tasks" description="Monitor and manage tasks across all users" />
-
-        <SearchFilters
-          searchValue={taskSearchTerm}
-          onSearchChange={setTaskSearchTerm}
-          searchPlaceholder="Search tasks..."
-          filters={[
-            {
-              value: taskStatusFilter,
-              onValueChange: setTaskStatusFilter,
-              placeholder: "Filter by status",
-              options: [
-                { value: "all", label: "All Tasks" },
-                { value: "pending", label: "Pending" },
-                { value: "completed", label: "Completed" },
-              ],
-            },
-            {
-              value: taskPriorityFilter,
-              onValueChange: setTaskPriorityFilter,
-              placeholder: "Filter by priority",
-              options: [
-                { value: "all", label: "All Priorities" },
-                { value: "high", label: "High" },
-                { value: "medium", label: "Medium" },
-                { value: "low", label: "Low" },
-              ],
-            },
-          ]}
-        />
-
-        <DataTable
-          title="Tasks Overview"
-          description="All tasks across the platform"
-          columns={[
-            { key: "title", label: "Task" },
-            { key: "user", label: "User" },
-            { key: "status", label: "Status" },
-            { key: "priority", label: "Priority" },
-            { key: "createdAt", label: "Created" },
-            { key: "actions", label: "Actions", className: "text-right" },
-          ]}
-          data={paginatedTasks}
-          renderCell={(task, column) => {
-            switch (column.key) {
-              case "title":
-                return <span className="font-medium">{task.title}</span>
-              case "user":
-                return task.user
-              case "status":
-                return <StatusBadge status={task.status} />
-              case "priority":
-                return <StatusBadge status={task.priority} type="priority" />
-              case "createdAt":
-                return task.createdAt
-              case "actions":
-                return (
-                  <Button variant="ghost" size="sm" onClick={() => handleViewTask(task)}>
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                )
-              default:
-                return null
-            }
-          }}
-        />
-
-        <Pagination
-          currentPage={tasksCurrentPage}
-          totalPages={totalTasksPages}
-          onPageChange={setTasksCurrentPage}
-          itemsPerPage={tasksPerPage}
-          totalItems={filteredTasks.length}
-        />
-
-        <Dialog open={viewTaskDialog} onOpenChange={setViewTaskDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="font-serif">Task Details</DialogTitle>
-              <DialogDescription>View task information and details</DialogDescription>
-            </DialogHeader>
-            {selectedTask && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Title</Label>
-                  <p className="text-sm text-muted-foreground">{selectedTask.title}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium">Assigned User</Label>
-                    <p className="text-sm text-muted-foreground">{selectedTask.user}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Status</Label>
-                    <div className="mt-1">
-                      <StatusBadge status={selectedTask.status} />
+      {tasksError ? (
+        <Card>
+          <CardContent className="flex items-center justify-center p-8">
+            <div className="text-center">
+              <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-2" />
+              <p className="text-destructive mb-2">Failed to load tasks</p>
+              <p className="text-sm text-muted-foreground mb-4">{tasksError}</p>
+              <Button onClick={fetchAllTasks} variant="outline" size="sm">
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : isLoading && allTasks.length === 0 ? (
+        <Card>
+          <CardContent className="flex items-center justify-center p-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+              <p className="text-muted-foreground">Loading tasks...</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : allTasks.length === 0 && !isLoading ? (
+        // This is the new conditional block for the empty message.
+        // It will render only when there are no tasks and the page is not loading.
+        <div className="text-center py-8">
+          <ClipboardList className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-muted-foreground">No tasks found</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {taskSearchTerm || taskStatusFilter !== "all" || taskPriorityFilter !== "all"
+              ? "Try adjusting your search filters"
+              : "Tasks will appear here once users create them"}
+          </p>
+        </div>
+      ) : (
+        // This block now only contains the DataTable and Pagination.
+        // It will only render when allTasks has data.
+        <>
+          <DataTable
+            title="Tasks Overview"
+            description="All tasks across the platform"
+            columns={[
+              { key: "title", label: "Task" },
+              { key: "user", label: "User" },
+              { key: "status", label: "Status" },
+              { key: "priority", label: "Priority" },
+              { key: "createdAt", label: "Created" },
+              { key: "actions", label: "Actions", className: "text-right" },
+            ]}
+            data={allTasks}
+            renderCell={(task, column) => {
+              switch (column.key) {
+                case "title":
+                  return <span className="font-medium">{String(task?.title || "Untitled Task")}</span>;
+                case "user":
+                  return <span className="text-sm">{String(task?.user || "Unknown User")}</span>;
+                case "status":
+                  return <StatusBadge status={(task?.status as "pending" | "completed") || "pending"} />;
+                case "priority":
+                  return <StatusBadge status={(task?.priority as "low" | "medium" | "high") || "low"} type="priority" />;
+                case "createdAt":
+                  return <span className="text-sm">{String(task?.createdAt || "Unknown")}</span>;
+                case "actions":
+                  return (
+                    <div className="flex items-center justify-end space-x-2">
+                      <Button variant="ghost" size="sm" onClick={() => handleViewTask(task)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
                     </div>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Priority</Label>
-                    <div className="mt-1">
-                      <StatusBadge status={selectedTask.priority} type="priority" />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Created</Label>
-                    <p className="text-sm text-muted-foreground">{selectedTask.createdAt}</p>
-                  </div>
-                </div>
+                  );
+                default:
+                  return <span></span>;
+              }
+            }}
+          />
+
+          {totalTasksPages > 1 && (
+            <Pagination
+              currentPage={tasksCurrentPage}
+              totalPages={totalTasksPages}
+              onPageChange={setTasksCurrentPage}
+              itemsPerPage={tasksPerPage}
+              totalItems={totalTasksCount}
+            />
+          )}
+        </>
+      )}
+
+      <Dialog open={viewTaskDialog} onOpenChange={setViewTaskDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">Task Details</DialogTitle>
+            <DialogDescription>View task information and details</DialogDescription>
+          </DialogHeader>
+          {selectedTask && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Title</Label>
+                <p className="text-sm text-muted-foreground">{selectedTask.title}</p>
               </div>
-            )}
-          </DialogContent>
-        </Dialog>
-      </div>
-    )
-  }
-
+              {selectedTask.description && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Description</Label>
+                  <p className="text-sm text-muted-foreground">{selectedTask.description}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium">Assigned User</Label>
+                  <p className="text-sm text-muted-foreground">{selectedTask.user}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Status</Label>
+                  <div className="mt-1">
+                    <StatusBadge status={selectedTask.status} />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Priority</Label>
+                  <div className="mt-1">
+                    <StatusBadge status={selectedTask.priority} type="priority" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Created</Label>
+                  <p className="text-sm text-muted-foreground">{selectedTask.createdAt}</p>
+                </div>
+                {selectedTask.dueDate && (
+                  <div>
+                    <Label className="text-sm font-medium">Due Date</Label>
+                    <p className="text-sm text-muted-foreground">{selectedTask.dueDate}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
   const renderContent = () => {
     switch (activeSection) {
       case "overview":
@@ -817,6 +990,29 @@ export default function AdminDashboard() {
       default:
         return renderOverview()
     }
+  }
+
+  // Add error boundary for the whole component
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Authentication Required</h2>
+          <p className="text-muted-foreground">Please log in to access the admin dashboard.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (user.role !== "admin") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+          <p className="text-muted-foreground">You don't have permission to access this page.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
