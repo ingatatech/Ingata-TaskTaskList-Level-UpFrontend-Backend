@@ -40,6 +40,14 @@ import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
 import type { Task } from "@/lib/types"
 
+// ✅ define TaskResponse type once
+interface TaskResponse {
+  data: Task[]
+  total?: number
+  page?: number
+  limit?: number
+}
+
 export default function UserDashboard() {
   const [activeSection, setActiveSection] = useState("tasks")
   const [searchTerm, setSearchTerm] = useState("")
@@ -47,6 +55,9 @@ export default function UserDashboard() {
 
   const [currentPage, setCurrentPage] = useState(1)
   const [tasksPerPage] = useState(5)
+  
+  const [totalTasks, setTotalTasks] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
 
   const [isLoading, setIsLoading] = useState(false)
   const [tasks, setTasks] = useState<Task[]>([])
@@ -90,16 +101,27 @@ export default function UserDashboard() {
   const fetchTasks = async () => {
     try {
       setIsLoading(true)
+
       const response = await taskAPI.getTasks(currentPage, tasksPerPage, {
         title: searchTerm,
         status: filterStatus === "all" ? undefined : filterStatus,
       })
-      if (response && Array.isArray(response)) {
-        setTasks(response)
-      } else if (response && typeof response === "object" && "data" in response) {
-        setTasks((response as any).data || [])
+
+      //  FIXED: Parse properly and type it
+      if (response && typeof response === "object" && "data" in response) {
+        const apiResponse: TaskResponse = response as TaskResponse
+        setTasks(apiResponse.data || [])
+        setTotalTasks(apiResponse.total || 0)
+        setTotalPages(Math.ceil((apiResponse.total || 0) / tasksPerPage))
+      } else if (response && Array.isArray(response)) {
+        const tasksArray = response as Task[]
+        setTasks(tasksArray)
+        setTotalTasks(tasksArray.length)
+        setTotalPages(1)
       } else {
         setTasks([])
+        setTotalTasks(0)
+        setTotalPages(1)
       }
     } catch (error) {
       toast({
@@ -107,6 +129,9 @@ export default function UserDashboard() {
         description: "Failed to fetch tasks",
         variant: "destructive",
       })
+      setTasks([])
+      setTotalTasks(0)
+      setTotalPages(1)
     } finally {
       setIsLoading(false)
     }
@@ -201,8 +226,9 @@ export default function UserDashboard() {
     setIsViewDialogOpen(true)
   }
 
+  // FIXED: Updated taskStats to use totalTasks from API
   const taskStats = {
-    total: tasks.length,
+    total: totalTasks, // Use totalTasks from API instead of tasks.length
     completed: tasks.filter((t: Task) => t.status === "completed").length,
     pending: tasks.filter((t: Task) => t.status === "pending").length,
     overdue: 1, // Mock overdue count
@@ -231,17 +257,10 @@ export default function UserDashboard() {
     },
   ]
 
+  // FIXED: Removed double pagination - API handles all filtering and pagination
   const renderTaskManagement = () => {
-    const filteredTasks = tasks.filter((task: Task) => {
-      const matchesSearch =
-        task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        task.description.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesFilter = filterStatus === "all" || task.status === filterStatus
-      return matchesSearch && matchesFilter
-    })
-
-    const totalPages = Math.ceil(filteredTasks.length / tasksPerPage)
-    const paginatedTasks = filteredTasks.slice((currentPage - 1) * tasksPerPage, currentPage * tasksPerPage)
+    // Use tasks directly from API - no client-side filtering/pagination needed
+    const displayTasks = tasks
 
     return (
       <div className="space-y-6">
@@ -341,14 +360,21 @@ export default function UserDashboard() {
 
         <StatsGrid stats={taskStatsData} />
 
+        {/* FIXED: Reset page when searching/filtering */}
         <SearchFilters
           searchValue={searchTerm}
-          onSearchChange={setSearchTerm}
+          onSearchChange={(value) => {
+            setSearchTerm(value)
+            setCurrentPage(1) // Reset to first page when searching
+          }}
           searchPlaceholder="Search tasks..."
           filters={[
             {
               value: filterStatus,
-              onValueChange: setFilterStatus,
+              onValueChange: (value) => {
+                setFilterStatus(value)
+                setCurrentPage(1) // Reset to first page when filtering
+              },
               placeholder: "Filter by status",
               options: [
                 { value: "all", label: "All Tasks" },
@@ -369,7 +395,7 @@ export default function UserDashboard() {
             { key: "dueDate", label: "Due Date" },
             { key: "actions", label: "Actions", className: "text-right" },
           ]}
-          data={paginatedTasks}
+          data={displayTasks}
           renderCell={(task, column) => {
             switch (column.key) {
               case "task":
@@ -449,12 +475,13 @@ export default function UserDashboard() {
           }}
         />
 
+        {/* FIXED: Use totalPages and totalTasks from API */}
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={setCurrentPage}
           itemsPerPage={tasksPerPage}
-          totalItems={filteredTasks.length}
+          totalItems={totalTasks}
         />
 
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -728,7 +755,12 @@ export default function UserDashboard() {
 
   return (
     <div className="flex h-screen bg-background">
-      <Sidebar userRole="user" activeSection={activeSection} onSectionChange={setActiveSection} />
+      <Sidebar 
+        userRole="user" 
+        activeSection={activeSection} 
+        onSectionChange={setActiveSection}
+        onLogout={logout}
+      />
       <main className="flex-1 overflow-auto">
         <div className="p-6">{renderContent()}</div>
       </main>
