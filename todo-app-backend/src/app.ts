@@ -1,26 +1,24 @@
 import "reflect-metadata";
+import dotenv from 'dotenv';
+dotenv.config(); // <-- make sure this is first
+
 import express from 'express';
 import { DataSource } from 'typeorm';
-import dotenv from 'dotenv';
-import cors from 'cors'; // This is the new import line
+import cors from 'cors';
 
 import { User } from './entities/User';
 import { Task } from './entities/Task';
-import userRoutes from '././routes/userRoutes';
-import authRoutes from '././routes/authRoutes';
+import userRoutes from './routes/userRoutes';
+import authRoutes from './routes/authRoutes';
 import taskRoutes from './routes/taskRoutes';
 import adminTaskRoutes from './routes/adminTaskRoutes';
-
-dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-// Add the cors middleware here, before your routes
-// This allows your frontend (e.g., on localhost:3000) to communicate with your backend
 app.use(cors({
-  origin: '*', 
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: '*',
+  methods: ['GET','POST','PUT','DELETE'],
   credentials: true
 }));
 
@@ -41,11 +39,10 @@ export const AppDataSource = new DataSource({
   },
 });
 
-// Correctly use the route files with their respective prefixes
-app.use('/api/admin', userRoutes); // All admin routes will start with /api/admin
-app.use('/api/auth', authRoutes); // All auth routes will start with /api/auth
+app.use('/api/admin', userRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api', taskRoutes);
-app.use('/api/admin', adminTaskRoutes); 
+app.use('/api/admin', adminTaskRoutes);
 
 AppDataSource.initialize()
   .then(() => {
@@ -56,5 +53,5 @@ AppDataSource.initialize()
     });
   })
   .catch((err) => {
-    console.error("Error during Data Source initialization:", err); // Typo corrected here
+    console.error("Error during Data Source initialization:", err);
   });

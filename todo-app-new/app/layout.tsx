@@ -22,7 +22,7 @@ const openSans = Open_Sans({
 export const metadata: Metadata = {
   title: "TaskFlow - Modern To-Do Management",
   description: "Professional task management with OTP authentication",
-  generator: "v0.app",
+  generator: "-",
 }
 
 export default function RootLayout({
