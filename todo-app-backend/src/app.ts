@@ -1,3 +1,4 @@
+//app.ts
 import "reflect-metadata";
 import dotenv from 'dotenv';
 dotenv.config(); // <-- make sure this is first

@@ -1,3 +1,4 @@
+//app/page.tsx
 "use client"
 
 import type React from "react"
@@ -140,7 +141,7 @@ export default function HomePage() {
                 </a>
               </Button>
               <Button asChild variant="outline" className="w-full font-medium h-11" size="lg">
-                <a href="/verify-otp">
+                <a href="/auth/otp-verification">
                   Verify Account (OTP)
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </a>

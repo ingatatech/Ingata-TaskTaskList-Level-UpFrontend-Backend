@@ -33,7 +33,11 @@ export default function AdminDashboard() {
   return (
     <AdminAuthWrapper>
       <div className="flex h-screen bg-background">
-        <Sidebar userRole="admin" activeSection={activeSection} onSectionChange={setActiveSection} />
+        <Sidebar
+          userRole="admin"
+          activeSection={activeSection}
+          onSectionChange={setActiveSection}
+        />
         <main className="flex-1 overflow-auto">
           <div className="p-6">{renderContent()}</div>
         </main>

@@ -37,8 +37,9 @@ const getAuthHeaders = () => {
   }
 }
 
-// Auth API
+// *** UPDATED AUTH API FOR NEW FLOW ***
 export const authApi = {
+  // Login - now handles first login detection
   login: async (email: string, password: string) => {
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: "POST",
@@ -54,16 +55,65 @@ export const authApi = {
     return response.json()
   },
 
-  verifyOtp: async (email: string, otp: string, newPassword: string) => {
+  // *** NEW: First login password reset initiation ***
+  initiateFirstLoginReset: async (email: string) => {
+    const response = await fetch(`${API_BASE_URL}/auth/first-login-reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to initiate password reset")
+    }
+
+    return response.json()
+  },
+
+  // *** NEW: Regular forgot password (for existing users) ***
+  forgotPassword: async (email: string) => {
+    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to initiate password reset")
+    }
+
+    return response.json()
+  },
+
+  // *** UPDATED: OTP verification only (separated from password setting) ***
+  verifyOtp: async (email: string, otp: string, type: "first-login" | "forgot-password" = "first-login") => {
     const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, otp, newPassword }),
+      body: JSON.stringify({ email, otp, type }),
     })
 
     if (!response.ok) {
       const error = await response.json()
       throw new Error(error.message || "OTP verification failed")
+    }
+
+    return response.json()
+  },
+
+  // *** NEW: Set new password (after OTP verification) ***
+  setNewPassword: async (email: string, otp: string, newPassword: string, type: "first-login" | "forgot-password" = "first-login") => {
+    const response = await fetch(`${API_BASE_URL}/auth/set-new-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otp, newPassword, type }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to set new password")
     }
 
     return response.json()

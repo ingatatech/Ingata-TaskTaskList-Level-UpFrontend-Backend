@@ -1,3 +1,4 @@
+// ===== 1. MODIFIED entities/User.ts =====
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Task } from './Task';
 
@@ -26,12 +27,20 @@ export class User {
   })
   status!: "active" | "inactive";
 
-  @Column({ type: 'varchar', nullable: true }) // <-- Changed this line
+  @Column({ type: 'varchar', nullable: true })
   otp!: string | null;
 
-  @Column({ type: 'timestamp', nullable: true }) // <-- Changed this line
+  @Column({ type: 'timestamp', nullable: true })
   otpExpiry!: Date | null;
-  
+
+  // *** NEW FIELD FOR FIRST LOGIN CHECK ***
+  @Column({ default: true })
+  isFirstLogin!: boolean;
+
+  // *** NEW FIELD FOR TEMP RANDOM PASSWORD ***
+  @Column({ type: 'varchar', nullable: true })
+  tempPassword!: string | null;
+
   @OneToMany(() => Task, (task) => task.user)
   tasks!: Task[];
 

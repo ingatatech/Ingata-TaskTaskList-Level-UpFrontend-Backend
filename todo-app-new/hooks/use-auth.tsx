@@ -1,3 +1,4 @@
+// app/hooks/use-auth.tsx
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
@@ -9,7 +10,8 @@ interface AuthContextType {
   token: string | null
   login: (email: string, password: string) => Promise<void>
   logout: () => void
-  verifyOtp: (email: string, otp: string, newPassword: string) => Promise<void>
+  verifyOtp: (email: string, otp: string, type?: "first-login" | "forgot-password") => Promise<void>
+  setNewPassword: (email: string, otp: string, newPassword: string, type?: "first-login" | "forgot-password") => Promise<void>
   isLoading: boolean
   isAuthenticated: boolean
   isAdmin: boolean
@@ -24,15 +26,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast()
 
   useEffect(() => {
-    // Check for stored token on mount
     const storedToken = localStorage.getItem("token")
     const storedUser = localStorage.getItem("user")
-
     if (storedToken && storedUser) {
       setToken(storedToken)
       setUser(JSON.parse(storedUser))
     }
-
     setIsLoading(false)
   }, [])
 
@@ -40,6 +39,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true)
       const response = await authApi.login(email, password)
+
+      if (response?.requiresPasswordReset && response?.isFirstLogin) {
+        toast({ title: "First login detected", description: "Please reset your password." })
+        window.location.href = `/auth/password-reset?email=${encodeURIComponent(email)}&type=first-login`
+        return
+      }
 
       const userData: User = {
         id: response.id || "temp-id",
@@ -52,19 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setToken(response.token)
       setUser(userData)
-
       localStorage.setItem("token", response.token)
       localStorage.setItem("user", JSON.stringify(userData))
 
-      toast({
-        title: "Login successful",
-        description: `Welcome back! Redirecting to ${response.role} dashboard...`,
-      })
-
-      // Redirect based on role
+      toast({ title: "Login successful", description: `Redirecting to ${response.role} dashboard...` })
       setTimeout(() => {
         window.location.href = response.role === "admin" ? "/admin" : "/dashboard"
-      }, 1000)
+      }, 800)
     } catch (error) {
       toast({
         title: "Login failed",
@@ -77,19 +76,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const verifyOtp = async (email: string, otp: string, newPassword: string) => {
+  const verifyOtp = async (email: string, otp: string, type: "first-login" | "forgot-password" = "first-login") => {
     try {
       setIsLoading(true)
-      await authApi.verifyOtp(email, otp, newPassword)
-
-      toast({
-        title: "Password set successfully",
-        description: "You can now log in with your new password.",
-      })
+      await authApi.verifyOtp(email, otp, type)
+      toast({ title: "OTP verified", description: "Continue to set a new password." })
     } catch (error) {
       toast({
         title: "OTP verification failed",
         description: error instanceof Error ? error.message : "Invalid or expired OTP",
+        variant: "destructive",
+      })
+      throw error
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const setNewPassword = async (email: string, otp: string, newPassword: string, type: "first-login" | "forgot-password" = "first-login") => {
+    try {
+      setIsLoading(true)
+      await authApi.setNewPassword(email, otp, newPassword, type)
+      toast({ title: "Password set successfully", description: "You can now log in with your new password." })
+    } catch (error) {
+      toast({
+        title: "Failed to set password",
+        description: error instanceof Error ? error.message : "Please try again",
         variant: "destructive",
       })
       throw error
@@ -103,33 +115,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null)
     localStorage.removeItem("token")
     localStorage.removeItem("user")
-
-    toast({
-      title: "Logged out",
-      description: "You have been successfully logged out.",
-    })
-
+    toast({ title: "Logged out", description: "You have been successfully logged out." })
     window.location.href = "/"
   }
 
-  const value = {
-    user,
-    token,
-    login,
-    logout,
-    verifyOtp,
-    isLoading,
-    isAuthenticated: !!token && !!user,
-    isAdmin: user?.role === "admin",
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        login,
+        logout,
+        verifyOtp,
+        setNewPassword,
+        isLoading,
+        isAuthenticated: !!token && !!user,
+        isAdmin: user?.role === "admin",
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
+  if (context === undefined) throw new Error("useAuth must be used within an AuthProvider")
   return context
 }
