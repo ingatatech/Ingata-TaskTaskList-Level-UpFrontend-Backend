@@ -4,6 +4,7 @@
 import { useState } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { AdminAuthWrapper } from "./components/admin-auth-wrapper"
+import Header from "@/components/header"
 import OverviewPage from "./overview/page"
 import UserManagementPage from "./users/page"
 import TaskManagementPage from "./tasks/page"
@@ -32,6 +33,8 @@ export default function AdminDashboard() {
 
   return (
     <AdminAuthWrapper>
+    <div className="flex flex-col h-screen bg-background">
+        <Header />
       <div className="flex h-screen bg-background">
         <Sidebar
           userRole="admin"
@@ -41,7 +44,8 @@ export default function AdminDashboard() {
         <main className="flex-1 overflow-auto">
           <div className="p-6">{renderContent()}</div>
         </main>
-      </div>
+        </div>
+    </div>
     </AdminAuthWrapper>
   )
 }

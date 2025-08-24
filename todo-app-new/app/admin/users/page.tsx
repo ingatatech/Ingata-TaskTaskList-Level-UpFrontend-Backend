@@ -1,7 +1,7 @@
 // admin/users/page.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react"
 import { PageHeader } from "@/components/page-header"
 import { SearchFilters } from "@/components/search-filters"
 import { StatusBadge } from "@/components/status-badge"
@@ -46,13 +46,18 @@ interface User {
   createdAt: string
 }
 
-export default function UserManagementPage() {
+interface UserManagementRef {
+  triggerAddUser: () => void
+}
+
+const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [newUserName, setNewUserName] = useState("")
   const [newUserEmail, setNewUserEmail] = useState("")
   const [newUserRole, setNewUserRole] = useState("")
 
+  const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false)
   const [editUserDialog, setEditUserDialog] = useState(false)
   const [viewUserDialog, setViewUserDialog] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -70,6 +75,14 @@ export default function UserManagementPage() {
   const { toast } = useToast()
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
+
+  // Expose the triggerAddUser method to parent components
+  useImperativeHandle(ref, () => ({
+    triggerAddUser: () => {
+      console.log("triggerAddUser called in UserManagementPage") // Debug log
+      setIsCreateUserDialogOpen(true)
+    }
+  }))
 
   const fetchUsers = async () => {
     setIsLoading(true)
@@ -129,6 +142,7 @@ export default function UserManagementPage() {
       setNewUserName("")
       setNewUserEmail("")
       setNewUserRole("")
+      setIsCreateUserDialogOpen(false)
 
       toast({
         title: "User Added",
@@ -231,7 +245,7 @@ export default function UserManagementPage() {
           label: "Add User",
           icon: <UserPlus className="h-4 w-4 mr-2" />,
           trigger: (
-            <Dialog>
+            <Dialog open={isCreateUserDialogOpen} onOpenChange={setIsCreateUserDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="font-medium">
                   <UserPlus className="h-4 w-4 mr-2" />
@@ -504,4 +518,8 @@ export default function UserManagementPage() {
       </Dialog>
     </div>
   )
-}
+})
+
+UserManagementPage.displayName = "UserManagementPage"
+
+export default UserManagementPage

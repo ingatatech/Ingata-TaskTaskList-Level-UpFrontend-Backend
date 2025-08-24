@@ -1,7 +1,7 @@
 // dashboard/components/MyTasksSection.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react"
 import { PageHeader } from "@/components/page-header"
 import { StatsGrid } from "@/components/stats-grid"
 import { SearchFilters } from "@/components/search-filters"
@@ -46,7 +46,11 @@ interface TaskResponse {
   limit?: number
 }
 
-export function MyTasksSection() {
+interface MyTasksSectionRef {
+  triggerAddTask: () => void
+}
+
+export const MyTasksSection = forwardRef<MyTasksSectionRef>((props, ref) => {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [currentPage, setCurrentPage] = useState(1)
@@ -79,6 +83,13 @@ export function MyTasksSection() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [viewTask, setViewTask] = useState<Task | null>(null)
+
+  // Expose the triggerAddTask method to parent components
+  useImperativeHandle(ref, () => ({
+    triggerAddTask: () => {
+      setIsCreateDialogOpen(true)
+    }
+  }))
 
   useEffect(() => {
     if (user?.role === "user") {
@@ -611,4 +622,4 @@ export function MyTasksSection() {
       </Dialog>
     </div>
   )
-}
+})
