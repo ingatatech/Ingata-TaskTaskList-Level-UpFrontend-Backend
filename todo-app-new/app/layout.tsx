@@ -33,7 +33,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${montserrat.variable} ${openSans.variable} antialiased`}>
-     a <body className="font-sans">
+      <body className="font-sans">
         <AuthProvider>
           {children}
           <Toaster />

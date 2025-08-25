@@ -33,15 +33,15 @@ export class User {
   @Column({ type: 'timestamp', nullable: true })
   otpExpiry!: Date | null;
 
-  // *** NEW FIELD FOR FIRST LOGIN CHECK ***
+  // NEW FIELD FOR FIRST LOGIN CHECK
   @Column({ default: true })
   isFirstLogin!: boolean;
 
-  // *** NEW FIELD FOR TEMP RANDOM PASSWORD ***
+  // NEW FIELD FOR TEMP RANDOM PASSWORD
   @Column({ type: 'varchar', nullable: true })
   tempPassword!: string | null;
 
-  @OneToMany(() => Task, (task) => task.user)
+  @OneToMany(() => Task, (task) => task.user, { cascade: true }) // CASCADE DELETE FIX
   tasks!: Task[];
 
   @CreateDateColumn()

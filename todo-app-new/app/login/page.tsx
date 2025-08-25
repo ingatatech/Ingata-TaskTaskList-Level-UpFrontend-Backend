@@ -121,7 +121,7 @@ export default function LoginPage() {
                 </div>
                 <div className="flex space-x-2">
                   <Button asChild variant="outline" className="flex-1 font-medium">
-                    <Link href="/auth/forgot-password">Forgot Password</Link>
+                    <Link href="/auth/password-reset">Forgot Password</Link>
                   </Button>
                 </div>
               </div>

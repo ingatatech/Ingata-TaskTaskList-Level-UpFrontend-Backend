@@ -1,3 +1,4 @@
+//entities/Task.ts
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { User } from './User';
 
@@ -19,7 +20,7 @@ export class Task {
   })
   status!: "pending" | "completed";
 
-  @ManyToOne(() => User, (user) => user.tasks)
+  @ManyToOne(() => User, (user) => user.tasks, { onDelete: 'CASCADE' }) // CASCADE DELETE FIX
   user!: User;
 
   @CreateDateColumn()

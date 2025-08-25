@@ -6,7 +6,7 @@ import { authMiddleware, adminMiddleware } from '../middlewares/authMiddleware';
 import { ILike } from 'typeorm';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
-import { hashPassword } from '../services/userService'; // Import hashPassword
+import { hashPassword } from '../services/userService';
 
 interface AuthRequest extends Request {
   user?: { id: string; role: 'admin' | 'user' };
@@ -24,34 +24,30 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// *** MODIFIED: Create user with RANDOM PASSWORD instead of OTP ***
+// CREATE USER WITH RANDOM PASSWORD
 router.post('/users/create', async (req: Request, res: Response) => {
   try {
     const { email, role } = req.body;
     const userRepository = AppDataSource.getRepository(User);
 
-    // Check if user exists
     const existingUser = await userRepository.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(409).json({ message: 'User with this email already exists.' });
-    }
+    if (existingUser) return res.status(409).json({ message: 'User with this email already exists.' });
 
-    // *** GENERATE RANDOM PASSWORD (instead of OTP) ***
-    const tempPassword = crypto.randomBytes(8).toString('hex'); // e.g., "a1b2c3d4e5f6g7h8"
+    const tempPassword = crypto.randomBytes(8).toString('hex');
     const hashedTempPassword = await hashPassword(tempPassword);
 
-    // Create user with temp password and isFirstLogin = true
-   const user = userRepository.create({
-  email,
-  role: role || 'user',
-  password: hashedTempPassword,
-  isFirstLogin: true,
-  otp: null,
-  otpExpiry: null,
-});
+    const user = userRepository.create({
+      email,
+      role: role || 'user',
+      password: hashedTempPassword,
+      isFirstLogin: true,
+      otp: null,
+      otpExpiry: null,
+    });
+
     await userRepository.save(user);
 
-    // *** SEND CREDENTIALS EMAIL (instead of OTP) ***
+    // SEND CREDENTIALS EMAIL
     try {
       await transporter.sendMail({
         from: process.env.EMAIL_FROM,
@@ -65,7 +61,7 @@ router.post('/users/create', async (req: Request, res: Response) => {
             <li><strong>Email:</strong> ${email}</li>
             <li><strong>Temporary Password:</strong> ${tempPassword}</li>
           </ul>
-          <p><em>Note: You will be required to set a new password after your first login for security purposes.</em></p>
+          <p><em>Note: You will be required to set a new password after your first login.</em></p>
           <p>Please login at: <a href="${process.env.FRONTEND_URL}/auth/login">${process.env.FRONTEND_URL}/auth/login</a></p>
         `,
       });
@@ -79,12 +75,12 @@ router.post('/users/create', async (req: Request, res: Response) => {
       user: { email: user.email, role: user.role }
     });
   } catch (error) {
-    const errorMessage = (error as Error).message;
-    console.error(errorMessage);
-    res.status(500).json({ message: 'Server error', error: errorMessage });
+    console.error(error);
+    res.status(500).json({ message: 'Server error', error });
   }
 });
-// --- Count all users ---
+
+// COUNT ALL USERS
 router.get('/users/count', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const total = await AppDataSource.getRepository(User).count();
@@ -95,7 +91,7 @@ router.get('/users/count', authMiddleware, adminMiddleware, async (req: AuthRequ
   }
 });
 
-// --- Count active users ---
+// COUNT ACTIVE USERS
 router.get('/users/count/active', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const activeCount = await AppDataSource.getRepository(User).count({ where: { status: 'active' } });
@@ -106,7 +102,7 @@ router.get('/users/count/active', authMiddleware, adminMiddleware, async (req: A
   }
 });
 
-// --- Get paginated users ---
+// GET PAGINATED USERS
 router.get('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { page = 1, limit = 5, email, role, status } = req.query;
@@ -136,7 +132,7 @@ router.get('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, r
   }
 });
 
-// --- Get single user ---
+// GET SINGLE USER
 router.get('/users/:id', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const user = await AppDataSource.getRepository(User).findOne({ where: { id: req.params.id } });
@@ -148,7 +144,7 @@ router.get('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReques
   }
 });
 
-// --- Update user ---
+// UPDATE USER
 router.put('/users/:id', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { email, role, status } = req.body;
@@ -168,11 +164,14 @@ router.put('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReques
   }
 });
 
-// --- Delete user ---
+// DELETE USER (CASCADE TASKS AUTOMATICALLY)
 router.delete('/users/:id', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const result = await AppDataSource.getRepository(User).delete(req.params.id);
-    if (result.affected === 0) return res.status(404).json({ message: 'User not found.' });
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository.findOne({ where: { id: req.params.id } });
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    await userRepository.remove(user); // Tasks will be deleted automatically because of cascade
     res.status(200).json({ message: 'User deleted successfully.' });
   } catch (error) {
     console.error(error);
