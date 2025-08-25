@@ -51,18 +51,19 @@ export default function UserDashboard() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <Header />
-      <div className="flex h-screen bg-background">
-        <Sidebar
-          userRole="user"
-          activeSection={activeSection}
-          onSectionChange={setActiveSection}
-          onAddTask={handleAddTaskFromSidebar}
-        />
-        <main className="flex-1 overflow-auto">
-          <div className="p-6">{renderContent()}</div>
-        </main>
-      </div>
-    </div>
+  <Header />
+  <div className="flex flex-1 bg-background">   {/* use flex-1 instead of h-screen */}
+    <Sidebar
+      userRole="user"
+      activeSection={activeSection}
+      onSectionChange={setActiveSection}
+      onAddTask={handleAddTaskFromSidebar}
+    />
+    <main className="flex-1 overflow-y-auto">   {/* only vertical scroll */}
+      <div className="p-6">{renderContent()}</div>
+    </main>
+  </div>
+</div>
+
   )
 }
