@@ -1,7 +1,7 @@
 // admin/tasks/page.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react"
 import { PageHeader } from "@/components/page-header"
 import { SearchFilters } from "@/components/search-filters"
 import { StatusBadge } from "@/components/status-badge"
@@ -9,15 +9,19 @@ import { DataTable } from "@/components/data-table"
 import { Pagination } from "@/components/pagination"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
-import { ClipboardList, Eye, AlertTriangle } from "lucide-react"
+import { ClipboardList, Eye, AlertTriangle, Plus } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { adminTaskAPI } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
@@ -33,13 +37,25 @@ interface Task {
   dueDate?: string | null
 }
 
-export default function TaskManagementPage() {
+interface TaskManagementRef {
+  triggerAddTask: () => void
+}
+
+const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
   const [taskSearchTerm, setTaskSearchTerm] = useState("")
   const [taskStatusFilter, setTaskStatusFilter] = useState("all")
   const [taskPriorityFilter, setTaskPriorityFilter] = useState("all")
 
   const [viewTaskDialog, setViewTaskDialog] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+
+  // Add Task Dialog States
+  const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false)
+  const [newTaskTitle, setNewTaskTitle] = useState("")
+  const [newTaskDescription, setNewTaskDescription] = useState("")
+  const [newTaskPriority, setNewTaskPriority] = useState("")
+  const [newTaskAssignedUser, setNewTaskAssignedUser] = useState("")
+  const [newTaskDueDate, setNewTaskDueDate] = useState("")
 
   const [allTasks, setAllTasks] = useState<Task[]>([])
   const [totalTasksCount, setTotalTasksCount] = useState(0)
@@ -50,6 +66,14 @@ export default function TaskManagementPage() {
   const { toast } = useToast()
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
+
+  // Expose the triggerAddTask method to parent components
+  useImperativeHandle(ref, () => ({
+    triggerAddTask: () => {
+      console.log("triggerAddTask called in TaskManagementPage") // Debug log
+      setIsCreateTaskDialogOpen(true)
+    }
+  }))
 
   const fetchAllTasks = async () => {
     setIsLoading(true)
@@ -94,6 +118,52 @@ export default function TaskManagementPage() {
     setTasksCurrentPage(1)
   }, [taskSearchTerm, taskStatusFilter])
 
+  const handleAddTask = async () => {
+    if (!newTaskTitle || !newTaskPriority || !newTaskAssignedUser) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      // You'll need to implement this API call based on your backend
+      // await adminTaskAPI.createTask({
+      //   title: newTaskTitle,
+      //   description: newTaskDescription,
+      //   priority: newTaskPriority,
+      //   assignedUser: newTaskAssignedUser,
+      //   dueDate: newTaskDueDate
+      // })
+
+      // Reset form
+      setNewTaskTitle("")
+      setNewTaskDescription("")
+      setNewTaskPriority("")
+      setNewTaskAssignedUser("")
+      setNewTaskDueDate("")
+      setIsCreateTaskDialogOpen(false)
+
+      toast({
+        title: "Task Created",
+        description: "Task has been successfully created and assigned.",
+      })
+
+      fetchAllTasks()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create task",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleViewTask = (task: Task) => {
     setSelectedTask(task)
     setViewTaskDialog(true)
@@ -103,7 +173,88 @@ export default function TaskManagementPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="All Tasks" description="Monitor and manage tasks across all users" />
+      <PageHeader
+        title="All Tasks"
+        description="Monitor and manage tasks across all users"
+        actionButton={{
+          label: "Add Task",
+          icon: <Plus className="h-4 w-4 mr-2" />,
+          trigger: (
+            <Dialog open={isCreateTaskDialogOpen} onOpenChange={setIsCreateTaskDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="font-medium">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Task
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="font-serif">Create New Task</DialogTitle>
+                  <DialogDescription>Assign a new task to a user</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="task-title">Task Title *</Label>
+                    <Input
+                      id="task-title"
+                      placeholder="Enter task title"
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="task-description">Description</Label>
+                    <Textarea
+                      id="task-description"
+                      placeholder="Enter task description (optional)"
+                      value={newTaskDescription}
+                      onChange={(e) => setNewTaskDescription(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="task-priority">Priority *</Label>
+                      <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="task-user">Assign to User *</Label>
+                      <Input
+                        id="task-user"
+                        placeholder="Enter user email"
+                        value={newTaskAssignedUser}
+                        onChange={(e) => setNewTaskAssignedUser(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="task-due-date">Due Date (optional)</Label>
+                    <Input
+                      id="task-due-date"
+                      type="date"
+                      value={newTaskDueDate}
+                      onChange={(e) => setNewTaskDueDate(e.target.value)}
+                    />
+                  </div>
+                  <Button onClick={handleAddTask} className="w-full font-medium" disabled={isLoading}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    {isLoading ? "Creating..." : "Create Task"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          ),
+        }}
+      />
 
       <SearchFilters
         searchValue={taskSearchTerm}
@@ -252,4 +403,8 @@ export default function TaskManagementPage() {
       </Dialog>
     </div>
   )
-}
+})
+
+TaskManagementPage.displayName = "TaskManagementPage"
+
+export default TaskManagementPage

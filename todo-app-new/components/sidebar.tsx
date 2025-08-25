@@ -23,30 +23,72 @@ import {
   BarChart3, 
   CheckCircle2, 
   ChevronDown,
-  Plus 
+  ChevronRight,
+  Plus,
+  UserPlus,
+  Eye
 } from "lucide-react"
+
+interface SubItem {
+  id: string
+  label: string
+  icon?: any
+}
+
+interface MenuItem {
+  id: string
+  label: string
+  icon: any
+  hasDropdown?: boolean
+  subItems?: SubItem[]
+}
 
 interface SidebarProps {
   userRole: "admin" | "user"
   activeSection: string
   onSectionChange: (section: string) => void
-  onAddTask?: () => void // New prop for handling add task action
+  onAddTask?: () => void
+  onAddUser?: () => void // New prop for handling add user action
 }
 
-export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask }: SidebarProps) {
+export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, onAddUser }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [expandedItem, setExpandedItem] = useState<string | null>(null)
 
-  const adminMenuItems = [
+  const adminMenuItems: MenuItem[] = [
     { id: "overview", label: "Overview", icon: BarChart3 },
-    { id: "users", label: "User Management", icon: Users },
-    { id: "tasks", label: "All Tasks", icon: ClipboardList, hasDropdown: true },
+    { 
+      id: "users", 
+      label: "User Management", 
+      icon: Users,
+      subItems: [
+        { id: "users-view", label: "View All Users", icon: Eye },
+        { id: "users-add", label: "Add User", icon: UserPlus }
+      ]
+    },
+    { 
+      id: "tasks", 
+      label: "All Tasks", 
+      icon: ClipboardList,
+      subItems: [
+        { id: "tasks-view", label: "View All Tasks", icon: Eye },
+        //{ id: "tasks-add", label: "Add Task", icon: Plus }
+      ]
+    },
     { id: "profile", label: "Profile", icon: User },
     { id: "settings", label: "Settings", icon: Settings },
   ]
 
-  const userMenuItems = [
-    { id: "tasks", label: "My Tasks", icon: ClipboardList, hasDropdown: true },
+  const userMenuItems: MenuItem[] = [
+    { id: "tasks",
+       label: "My Tasks", 
+       icon: ClipboardList,
+       subItems: [ 
+        { id: "tasks-view", label: "View All Tasks", icon: Eye },
+        { id: "tasks-add", label: "Add Task", icon: Plus }
+       ] 
+    },
     { id: "profile", label: "Profile", icon: User },
     { id: "settings", label: "Settings", icon: Settings },
   ]
@@ -54,22 +96,55 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask }:
   const menuItems = userRole === "admin" ? adminMenuItems : userMenuItems
 
   const handleAddTask = () => {
-    console.log("Dropdown Add Task clicked") // Debug log
+    console.log("Dropdown Add Task clicked")
     setDropdownOpen(false)
     if (onAddTask) {
-      console.log("Calling onAddTask") // Debug log
+      console.log("Calling onAddTask")
       onAddTask()
     } else {
-      console.log("onAddTask is not defined") // Debug log
+      console.log("onAddTask is not defined")
     }
   }
 
-  const renderMenuItem = (item: any) => {
+  const handleAddUser = () => {
+    console.log("Add User clicked")
+    if (onAddUser) {
+      onAddUser()
+    }
+  }
+
+  const toggleExpanded = (itemId: string) => {
+    setExpandedItem(expandedItem === itemId ? null : itemId)
+  }
+
+  const handleSubItemClick = (subItemId: string, parentId: string) => {
+    if (subItemId === "users-view") {
+      onSectionChange("users")
+    } else if (subItemId === "users-add") {
+      onSectionChange("users")
+      // Trigger add user dialog after a short delay to ensure page is loaded
+      setTimeout(() => {
+        handleAddUser()
+      }, 100)
+    } else if (subItemId === "tasks-view") {
+      onSectionChange("tasks")
+    } else if (subItemId === "tasks-add") {
+      onSectionChange("tasks")
+      // Trigger add task dialog after a short delay to ensure page is loaded
+      setTimeout(() => {
+        handleAddTask()
+      }, 100)
+    }
+  }
+
+  const renderMenuItem = (item: MenuItem) => {
     const Icon = item.icon
     const isActive = activeSection === item.id
+    const hasSubItems = item.subItems && item.subItems.length > 0
+    const isExpanded = expandedItem === item.id
 
-    // If the item doesn't have a dropdown or sidebar is collapsed, render normal button
-    if (!item.hasDropdown || isCollapsed) {
+    // If sidebar is collapsed, render simple button
+    if (isCollapsed) {
       return (
         <Button
           key={item.id}
@@ -78,20 +153,69 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask }:
             "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent",
             isActive &&
               "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
-            isCollapsed && "px-2",
+            "px-2",
           )}
-          onClick={() => onSectionChange(item.id)}
+          onClick={() => {
+            if (hasSubItems) {
+              toggleExpanded(item.id)
+            } else {
+              onSectionChange(item.id)
+            }
+          }}
         >
-          <Icon className={cn("h-4 w-4", !isCollapsed && "mr-3")} />
-          {!isCollapsed && <span className="font-medium">{item.label}</span>}
+          <Icon className="h-4 w-4" />
         </Button>
       )
     }
 
-    // Render dropdown menu item
-    return (
-      <DropdownMenu key={item.id} open={dropdownOpen} onOpenChange={setDropdownOpen}>
-        <DropdownMenuTrigger asChild>
+    // If the item has a dropdown for tasks
+    if (item.hasDropdown && !hasSubItems) {
+      return (
+        <DropdownMenu key={item.id} open={dropdownOpen} onOpenChange={setDropdownOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant={isActive ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent group",
+                isActive &&
+                  "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+              )}
+              onClick={() => onSectionChange(item.id)}
+            >
+              <div className="flex items-center">
+                <Icon className="h-4 w-4 mr-3" />
+                <span className="font-medium">{item.label}</span>
+              </div>
+              <ChevronDown 
+                className={cn(
+                  "h-4 w-4 transition-transform duration-200",
+                  dropdownOpen && "rotate-180"
+                )} 
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent 
+            side="right" 
+            align="start" 
+            className="w-48 ml-2"
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
+            <DropdownMenuItem 
+              className="cursor-pointer focus:bg-sidebar-accent"
+              onSelect={handleAddTask}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Task
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )
+    }
+
+    // If the item has sub-items (like User Management)
+    if (hasSubItems) {
+      return (
+        <div key={item.id} className="space-y-1">
           <Button
             variant={isActive ? "default" : "ghost"}
             className={cn(
@@ -99,35 +223,61 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask }:
               isActive &&
                 "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
             )}
-            onClick={() => onSectionChange(item.id)}
+            onClick={() => toggleExpanded(item.id)}
           >
             <div className="flex items-center">
               <Icon className="h-4 w-4 mr-3" />
               <span className="font-medium">{item.label}</span>
             </div>
-            <ChevronDown 
+            <ChevronRight 
               className={cn(
                 "h-4 w-4 transition-transform duration-200",
-                dropdownOpen && "rotate-180"
+                isExpanded && "rotate-90"
               )} 
             />
           </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent 
-          side="right" 
-          align="start" 
-          className="w-48 ml-2"
-          onCloseAutoFocus={(e) => e.preventDefault()}
-        >
-          <DropdownMenuItem 
-            className="cursor-pointer focus:bg-sidebar-accent"
-            onSelect={handleAddTask}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Task
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          
+          {/* Sub-items */}
+          {isExpanded && (
+            <div className="ml-6 space-y-1 animate-slide-in-up">
+              {item.subItems?.map((subItem) => {
+                const SubIcon = subItem.icon
+                return (
+                  <Button
+                    key={subItem.id}
+                    variant="ghost"
+                    className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent/50 py-1.5 h-auto"
+                    onClick={() => handleSubItemClick(subItem.id, item.id)}
+                  >
+                    <div className="flex items-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-sidebar-primary mr-3" />
+                      {SubIcon && <SubIcon className="h-3.5 w-3.5 mr-2" />}
+                      <span className="text-sm font-medium">{subItem.label}</span>
+                    </div>
+                  </Button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    // Regular menu item
+    return (
+      <Button
+        key={item.id}
+        variant={isActive ? "default" : "ghost"}
+        className={cn(
+          "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent",
+          isActive &&
+            "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+        )}
+        onClick={() => onSectionChange(item.id)}
+      >
+        <Icon className="h-4 w-4 mr-3" />
+        <span className="font-medium">{item.label}</span>
+      </Button>
     )
   }
 
@@ -183,6 +333,24 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask }:
           {!isCollapsed && <span className="font-medium">Logout</span>}
         </Button>
       </div>
+
+      {/* CSS for animations */}
+      <style jsx>{`
+        @keyframes slide-in-up {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-slide-in-up {
+          animation: slide-in-up 0.2s ease-out;
+        }
+      `}</style>
     </div>
   )
 }
