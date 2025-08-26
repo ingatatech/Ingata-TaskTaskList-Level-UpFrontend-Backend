@@ -1,3 +1,4 @@
+//app/admin/components/admin-auth-wrapper.tsx
 "use client"
 
 import { ReactNode, useEffect } from "react"

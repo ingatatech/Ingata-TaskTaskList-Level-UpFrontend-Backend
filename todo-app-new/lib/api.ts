@@ -71,6 +71,19 @@ export const authApi = {
     return response.json()
   },
 
+  checkAdminExists: async () => {
+  const response = await fetch(`${API_BASE_URL}/admin/admin/exists`, {
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || "Failed to check admin existence")
+  }
+
+  return response.json() as Promise<{ adminExists: boolean; canAssignAdmin: boolean }>
+},
+
   // *** NEW: Regular forgot password (for existing users) ***
   forgotPassword: async (email: string) => {
     const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {

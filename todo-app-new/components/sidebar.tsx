@@ -8,26 +8,19 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/hooks/use-auth" //logout hook
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { 
-  Users, 
-  ClipboardList, 
-  User, 
-  LogOut, 
-  Menu, 
-  X, 
-  Settings, 
-  BarChart3, 
-  CheckCircle2, 
-  ChevronDown,
+  Users,
+  ClipboardList,
+  User,
+  LogOut,
+  Menu,
+  X,
+  Settings,
+  BarChart3,
+  CheckCircle2,
   ChevronRight,
   Plus,
   UserPlus,
-  Eye
+  Eye,
 } from "lucide-react"
 
 interface SubItem {
@@ -46,50 +39,54 @@ interface MenuItem {
 
 interface SidebarProps {
   userRole: "admin" | "user"
-  activeSection: string
-  onSectionChange: (section: string) => void
+  activeSection?: string
+  onSectionChange?: (section: string) => void
   onAddTask?: () => void
   onAddUser?: () => void
 }
 
-export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, onAddUser }: SidebarProps) {
+export function Sidebar({
+  userRole,
+  activeSection: activeSectionProp,
+  onSectionChange,
+  onAddTask,
+  onAddUser,
+}: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
+  const [activeSection, setActiveSection] = useState(activeSectionProp || "overview")
   const { logout } = useAuth()
 
   const adminMenuItems: MenuItem[] = [
     { id: "overview", label: "Overview", icon: BarChart3 },
-    { 
-      id: "users", 
-      label: "User Management", 
+    {
+      id: "users",
+      label: "User Management",
       icon: Users,
       subItems: [
         { id: "users-view", label: "View All Users", icon: Eye },
-        { id: "users-add", label: "Add User", icon: UserPlus }
-      ]
+        { id: "users-add", label: "Add User", icon: UserPlus },
+      ],
     },
-    { 
-      id: "tasks", 
-      label: "All Tasks", 
+    {
+      id: "tasks",
+      label: "All Tasks",
       icon: ClipboardList,
-      subItems: [
-        { id: "tasks-view", label: "View All Tasks", icon: Eye },
-      ]
+      subItems: [{ id: "tasks-view", label: "View All Tasks", icon: Eye }],
     },
     { id: "profile", label: "Profile", icon: User },
     { id: "settings", label: "Settings", icon: Settings },
   ]
 
   const userMenuItems: MenuItem[] = [
-    { 
+    {
       id: "tasks",
-      label: "My Tasks", 
+      label: "My Tasks",
       icon: ClipboardList,
-      subItems: [ 
+      subItems: [
         { id: "tasks-view", label: "View All Tasks", icon: Eye },
-        { id: "tasks-add", label: "Add Task", icon: Plus }
-      ] 
+        { id: "tasks-add", label: "Add Task", icon: Plus },
+      ],
     },
     { id: "profile", label: "Profile", icon: User },
     { id: "settings", label: "Settings", icon: Settings },
@@ -97,36 +94,32 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, o
 
   const menuItems = userRole === "admin" ? adminMenuItems : userMenuItems
 
-  const handleAddTask = () => {
-    if (onAddTask) onAddTask()
-  }
-
-  const handleAddUser = () => {
-    if (onAddUser) onAddUser()
-  }
+  const handleAddTask = () => onAddTask?.()
+  const handleAddUser = () => onAddUser?.()
 
   const toggleExpanded = (itemId: string) => {
     setExpandedItem(expandedItem === itemId ? null : itemId)
   }
 
   const handleSubItemClick = (subItemId: string, parentId: string) => {
-    if (subItemId === "users-view") {
-      onSectionChange("users")
+    if (subItemId === "users-view" || subItemId === "tasks-view") {
+      setActiveSection(parentId)
+      onSectionChange?.(parentId)
     } else if (subItemId === "users-add") {
-      onSectionChange("users")
-      setTimeout(() => handleAddUser(), 100)
-    } else if (subItemId === "tasks-view") {
-      onSectionChange("tasks")
+      setActiveSection("users")
+      onSectionChange?.("users")
+      setTimeout(handleAddUser, 100)
     } else if (subItemId === "tasks-add") {
-      onSectionChange("tasks")
-      setTimeout(() => handleAddTask(), 100)
+      setActiveSection("tasks")
+      onSectionChange?.("tasks")
+      setTimeout(handleAddTask, 100)
     }
   }
 
   const renderMenuItem = (item: MenuItem) => {
     const Icon = item.icon
     const isActive = activeSection === item.id
-    const hasSubItems = item.subItems && item.subItems.length > 0
+    const hasSubItems = (item.subItems?.length ?? 0) > 0
     const isExpanded = expandedItem === item.id
 
     if (isCollapsed) {
@@ -136,11 +129,10 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, o
           variant={isActive ? "default" : "ghost"}
           className={cn(
             "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent",
-            isActive &&
-              "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+            isActive && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
             "px-2",
           )}
-          onClick={() => hasSubItems ? toggleExpanded(item.id) : onSectionChange(item.id)}
+          onClick={() => (hasSubItems ? toggleExpanded(item.id) : handleSubItemClick(item.id, item.id))}
         >
           <Icon className="h-4 w-4" />
         </Button>
@@ -154,8 +146,7 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, o
             variant={isActive ? "default" : "ghost"}
             className={cn(
               "w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent group",
-              isActive &&
-                "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+              isActive && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
             )}
             onClick={() => toggleExpanded(item.id)}
           >
@@ -163,14 +154,11 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, o
               <Icon className="h-4 w-4 mr-3" />
               <span className="font-medium">{item.label}</span>
             </div>
-            <ChevronRight 
-              className={cn(
-                "h-4 w-4 transition-transform duration-200",
-                isExpanded && "rotate-90"
-              )} 
+            <ChevronRight
+              className={cn("h-4 w-4 transition-transform duration-200", isExpanded && "rotate-90")}
             />
           </Button>
-          
+
           {isExpanded && (
             <div className="ml-6 space-y-1 animate-slide-in-up">
               {item.subItems?.map((subItem) => {
@@ -202,10 +190,9 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, o
         variant={isActive ? "default" : "ghost"}
         className={cn(
           "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent",
-          isActive &&
-            "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+          isActive && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
         )}
-        onClick={() => onSectionChange(item.id)}
+        onClick={() => handleSubItemClick(item.id, item.id)}
       >
         <Icon className="h-4 w-4 mr-3" />
         <span className="font-medium">{item.label}</span>
@@ -216,11 +203,12 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, o
   return (
     <div
       className={cn(
-        "flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300",
+        "flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300",
         isCollapsed ? "w-16" : "w-64",
+        "h-screen sticky top-0"
       )}
     >
-      {/* Header */}
+      {/* Sidebar Header */}
       <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
         {!isCollapsed && (
           <div className="flex items-center space-x-3">
@@ -247,9 +235,7 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, o
 
       {/* Navigation */}
       <ScrollArea className="flex-1 overflow-y-auto px-3 py-4">
-        <nav className="space-y-2">
-          {menuItems.map((item) => renderMenuItem(item))}
-        </nav>
+        <nav className="space-y-2">{menuItems.map((item) => renderMenuItem(item))}</nav>
       </ScrollArea>
 
       {/* Footer */}
@@ -267,7 +253,6 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, o
         </Button>
       </div>
 
-      {/* CSS for animations */}
       <style jsx>{`
         @keyframes slide-in-up {
           from {
@@ -279,7 +264,7 @@ export function Sidebar({ userRole, activeSection, onSectionChange, onAddTask, o
             transform: translateY(0);
           }
         }
-        
+
         .animate-slide-in-up {
           animation: slide-in-up 0.2s ease-out;
         }

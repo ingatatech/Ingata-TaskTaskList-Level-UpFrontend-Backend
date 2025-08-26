@@ -1,4 +1,4 @@
-// ===== 2. MODIFIED routes/userRoutes.ts - User Creation =====
+// ===== BACKEND: Modified routes/userRoutes.ts =====
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../app';
 import { User } from '../entities/User';
@@ -24,21 +24,70 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// CREATE USER WITH RANDOM PASSWORD
+// *** NEW: CHECK ADMIN EXISTS ENDPOINT ***
+router.get('/admin/exists', async (req: Request, res: Response) => {
+  try {
+    const userRepository = AppDataSource.getRepository(User);
+    const adminExists = await userRepository.findOne({ 
+      where: { role: 'admin' },
+      select: ['id'] // Only select id for performance
+    });
+    
+    res.status(200).json({ 
+      adminExists: !!adminExists,
+      canAssignAdmin: !adminExists
+    });
+  } catch (error) {
+    console.error('Error checking admin existence:', error);
+    res.status(500).json({ message: 'Server error', error });
+  }
+});
+
+// *** UPDATED: CREATE USER WITH ADMIN CHECK LOGIC ***
 router.post('/users/create', async (req: Request, res: Response) => {
   try {
     const { email, role } = req.body;
     const userRepository = AppDataSource.getRepository(User);
 
+    // Check if user already exists
     const existingUser = await userRepository.findOne({ where: { email } });
-    if (existingUser) return res.status(409).json({ message: 'User with this email already exists.' });
+    if (existingUser) {
+      return res.status(409).json({ message: 'User with this email already exists.' });
+    }
 
+    // *** NEW LOGIC: Check if admin already exists ***
+    const adminExists = await userRepository.findOne({ 
+      where: { role: 'admin' },
+      select: ['id']
+    });
+
+    // Determine final role based on admin existence
+    let finalRole: 'admin' | 'user' = 'user'; // Default to user
+    
+    if (!adminExists) {
+      // No admin exists, allow the requested role (admin or user)
+      finalRole = role && (role === 'admin' || role === 'user') ? role : 'user';
+    } else {
+      // Admin exists, force role to be 'user'
+      finalRole = 'user';
+      
+      // If they tried to create an admin when one exists, return warning
+      if (role === 'admin') {
+        return res.status(400).json({ 
+          message: 'Cannot create admin user. An administrator already exists in the system.',
+          adminExists: true
+        });
+      }
+    }
+
+    // Generate temporary password
     const tempPassword = crypto.randomBytes(8).toString('hex');
     const hashedTempPassword = await hashPassword(tempPassword);
 
+    // Create user with determined role
     const user = userRepository.create({
       email,
-      role: role || 'user',
+      role: finalRole,
       password: hashedTempPassword,
       isFirstLogin: true,
       otp: null,
@@ -47,7 +96,7 @@ router.post('/users/create', async (req: Request, res: Response) => {
 
     await userRepository.save(user);
 
-    // SEND CREDENTIALS EMAIL
+    // Send credentials email
     try {
       await transporter.sendMail({
         from: process.env.EMAIL_FROM,
@@ -60,6 +109,7 @@ router.post('/users/create', async (req: Request, res: Response) => {
           <ul>
             <li><strong>Email:</strong> ${email}</li>
             <li><strong>Temporary Password:</strong> ${tempPassword}</li>
+            <li><strong>Role:</strong> ${finalRole}</li>
           </ul>
           <p><em>Note: You will be required to set a new password after your first login.</em></p>
           <p>Please login at: <a href="${process.env.FRONTEND_URL}/auth/login">${process.env.FRONTEND_URL}/auth/login</a></p>
@@ -67,19 +117,28 @@ router.post('/users/create', async (req: Request, res: Response) => {
       });
     } catch (emailError) {
       console.error('Failed to send credentials email:', emailError);
-      return res.status(500).json({ message: 'Failed to send credentials email', error: emailError });
+      return res.status(500).json({ 
+        message: 'User created but failed to send credentials email', 
+        error: emailError 
+      });
     }
 
     res.status(201).json({
-      message: 'User created successfully. Login credentials sent to user email.',
-      user: { email: user.email, role: user.role }
+      message: `User created successfully with role: ${finalRole}. Login credentials sent to user email.`,
+      user: { 
+        email: user.email, 
+        role: user.role,
+        assignedRole: finalRole,
+        adminExists: !!adminExists
+      }
     });
   } catch (error) {
-    console.error(error);
+    console.error('Error creating user:', error);
     res.status(500).json({ message: 'Server error', error });
   }
 });
 
+// ... (rest of the routes remain the same)
 // COUNT ALL USERS
 router.get('/users/count', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {

@@ -2,9 +2,8 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { Sidebar } from "@/components/sidebar"
+import DashboardLayout from "@/components/DashboardLayout"
 import { AdminAuthWrapper } from "./components/admin-auth-wrapper"
-import Header from "@/components/header"
 import OverviewPage from "./overview/page"
 import UserManagementPage from "./users/page"
 import TaskManagementPage from "./tasks/page"
@@ -40,21 +39,14 @@ export default function AdminDashboard() {
 
   return (
     <AdminAuthWrapper>
-      <div className="flex flex-col min-h-screen bg-background">
-        <Header />
-        <div className="flex flex-1">
-          <Sidebar
-            userRole="admin"
-            activeSection={activeSection}
-            onSectionChange={setActiveSection}
-            onAddUser={handleAddUser}
-          />
-          {/* scroll only inside main */}
-          <main className="flex-1 overflow-y-auto">
-            <div className="p-6">{renderContent()}</div>
-          </main>
-        </div>
-      </div>
+      <DashboardLayout
+        userRole="admin"
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+        onAddUser={handleAddUser}
+      >
+        {renderContent()}
+      </DashboardLayout>
     </AdminAuthWrapper>
   )
 }

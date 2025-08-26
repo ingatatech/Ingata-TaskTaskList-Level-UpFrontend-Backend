@@ -1,3 +1,4 @@
+//routes/authRoutes.ts
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../app';
 import { User } from '../entities/User';

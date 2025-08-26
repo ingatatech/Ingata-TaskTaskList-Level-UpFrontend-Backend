@@ -31,9 +31,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { UserPlus, Mail, Edit, Trash2, Eye, AlertTriangle } from "lucide-react"
+import { UserPlus, Mail, Edit, Trash2, Eye, AlertTriangle, Info } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { userAPI } from "@/lib/api"
+import { userAPI, authApi } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 
 interface User {
@@ -76,13 +76,41 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
 
+  // *** ADMIN CHECK STATE ***
+  const [adminExists, setAdminExists] = useState<boolean | null>(null)
+  const [canAssignAdmin, setCanAssignAdmin] = useState(false)
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(false)
+
   // Expose the triggerAddUser method to parent components
   useImperativeHandle(ref, () => ({
     triggerAddUser: () => {
-      console.log("triggerAddUser called in UserManagementPage") // Debug log
+      console.log("triggerAddUser called in UserManagementPage")
       setIsCreateUserDialogOpen(true)
     }
   }))
+
+  // *** NEW FUNCTION: Check if admin exists ***
+  const checkAdminExists = async () => {
+    setIsCheckingAdmin(true)
+    try {
+      const response = await authApi.checkAdminExists()
+      setAdminExists(response.adminExists)
+      setCanAssignAdmin(response.canAssignAdmin)
+      
+      // If admin exists and current role selection is admin, reset to user
+      if (response.adminExists && newUserRole === "admin") {
+        setNewUserRole("user")
+      }
+    } catch (error) {
+      console.error("Failed to check admin existence:", error)
+      // Default to safe state - assume admin exists
+      setAdminExists(true)
+      setCanAssignAdmin(false)
+      setNewUserRole("user")
+    } finally {
+      setIsCheckingAdmin(false)
+    }
+  }
 
   const fetchUsers = async () => {
     setIsLoading(true)
@@ -115,6 +143,13 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
     }
   }
 
+  // *** UPDATED: Check admin existence when dialog opens ***
+  useEffect(() => {
+    if (isCreateUserDialogOpen) {
+      checkAdminExists()
+    }
+  }, [isCreateUserDialogOpen])
+
   useEffect(() => {
     if (user?.role === "admin") {
       fetchUsers()
@@ -135,6 +170,16 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
       return
     }
 
+    // *** FRONTEND VALIDATION: Prevent admin creation if admin exists ***
+    if (adminExists && newUserRole === "admin") {
+      toast({
+        title: "Cannot Create Admin",
+        description: "An administrator already exists in the system. New users can only have 'User' role.",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setIsLoading(true)
       await userAPI.createUser(newUserEmail, newUserRole as "admin" | "user")
@@ -150,6 +195,8 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
       })
 
       fetchUsers()
+      // Refresh admin check after user creation
+      checkAdminExists()
     } catch (error) {
       toast({
         title: "Error",
@@ -209,6 +256,8 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
       })
 
       fetchUsers()
+      // Refresh admin check after user deletion (in case admin was deleted)
+      checkAdminExists()
     } catch (error) {
       toast({
         title: "Error",
@@ -257,6 +306,38 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
                   <DialogTitle className="font-serif">Create New User</DialogTitle>
                   <DialogDescription>Send an OTP invitation to create a new user account</DialogDescription>
                 </DialogHeader>
+                
+                {/* *** NEW: Admin Status Info Card *** */}
+                {isCheckingAdmin ? (
+                  <Card className="bg-blue-50 border-blue-200">
+                    <CardContent className="p-3">
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        <p className="text-sm text-blue-700">Checking admin status...</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : adminExists !== null && (
+                  <Card className={adminExists ? "bg-amber-50 border-amber-200" : "bg-green-50 border-green-200"}>
+                    <CardContent className="p-3">
+                      <div className="flex items-start space-x-2">
+                        <Info className="h-4 w-4 mt-0.5 text-amber-600" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {adminExists ? "Admin Exists" : "No Admin Found"}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {adminExists 
+                              ? "An administrator already exists. New users can only be assigned 'User' role." 
+                              : "No administrator found. New users can be assigned either 'User' or 'Admin' role."
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="user-name">Full Name</Label>
@@ -279,18 +360,31 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="user-role">Role</Label>
-                    <Select value={newUserRole} onValueChange={setNewUserRole}>
+                    <Label htmlFor="user-role">
+                      Role {adminExists && <span className="text-xs text-amber-600">(Admin role unavailable)</span>}
+                    </Label>
+                    <Select 
+                      value={newUserRole} 
+                      onValueChange={setNewUserRole}
+                      disabled={isCheckingAdmin}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select role" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
+                        {/* *** CONDITIONAL: Only show Admin option if no admin exists *** */}
+                        {canAssignAdmin && (
+                          <SelectItem value="admin">Admin</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button onClick={handleAddUser} className="w-full font-medium" disabled={isLoading}>
+                  <Button 
+                    onClick={handleAddUser} 
+                    className="w-full font-medium" 
+                    disabled={isLoading || isCheckingAdmin}
+                  >
                     <Mail className="h-4 w-4 mr-2" />
                     {isLoading ? "Sending..." : "Send OTP Invitation"}
                   </Button>
@@ -359,7 +453,16 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
                 case "email":
                   return <span className="font-medium">{String(user?.email || "No email")}</span>
                 case "role":
-                  return <span className="capitalize">{String(user?.role || "user")}</span>
+                  return (
+                    <span className="capitalize flex items-center space-x-1">
+                      <span>{String(user?.role || "user")}</span>
+                      {user?.role === "admin" && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          Admin
+                        </span>
+                      )}
+                    </span>
+                  )
                 case "status":
                   return <StatusBadge status={(user?.status as "active" | "inactive") || "inactive"} />
                 case "tasks":
@@ -386,6 +489,11 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
                             <AlertDialogTitle>Delete User</AlertDialogTitle>
                             <AlertDialogDescription>
                               Are you sure you want to delete {user?.email || "this user"}? This action cannot be undone.
+                              {user?.role === "admin" && (
+                                <span className="block mt-2 text-amber-600 font-medium">
+                                  Warning: Deleting the admin will allow new admin creation.
+                                </span>
+                              )}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>

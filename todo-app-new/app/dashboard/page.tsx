@@ -1,18 +1,14 @@
-// dashboard/page.tsx (Main Dashboard Orchestrator)
 "use client"
 
 import { useState, useRef } from "react"
-import Header from "@/components/header"
-import { Sidebar } from "@/components/sidebar"
-import { useAuth } from "@/hooks/use-auth"
-import { MyTasksSection } from "./components/MyTasksSection"
-import { ProfileSection } from "./components/ProfileSection"
-import { SettingsSection } from "./components/SettingsSection"
+import DashboardLayout from "@/components/DashboardLayout"
+import { MyTasksSection } from "@/app/dashboard/components/MyTasksSection"
+import { ProfileSection } from "@/app/dashboard/components/ProfileSection"
+import { SettingsSection } from "@/app/dashboard/components/SettingsSection"
 
 export default function UserDashboard() {
   const [activeSection, setActiveSection] = useState("tasks")
-  const { logout } = useAuth()
-  
+
   // Create a ref to access MyTasksSection methods
   const myTasksSectionRef = useRef<{ triggerAddTask: () => void }>(null)
 
@@ -41,7 +37,7 @@ export default function UserDashboard() {
       case "tasks":
         return <MyTasksSection ref={myTasksSectionRef} />
       case "profile":
-        return <ProfileSection />
+        return <ProfileSection  />
       case "settings":
         return <SettingsSection />
       default:
@@ -50,20 +46,13 @@ export default function UserDashboard() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-  <Header />
-  <div className="flex flex-1 bg-background">   {/* use flex-1 instead of h-screen */}
-    <Sidebar
+    <DashboardLayout
       userRole="user"
       activeSection={activeSection}
       onSectionChange={setActiveSection}
       onAddTask={handleAddTaskFromSidebar}
-    />
-    <main className="flex-1 overflow-y-auto">   {/* only vertical scroll */}
-      <div className="p-6">{renderContent()}</div>
-    </main>
-  </div>
-</div>
-
+    >
+      {renderContent()}
+    </DashboardLayout>
   )
 }

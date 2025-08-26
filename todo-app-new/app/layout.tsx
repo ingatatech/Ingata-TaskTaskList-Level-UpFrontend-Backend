@@ -1,4 +1,3 @@
-//layout.tsx
 import type React from "react"
 import type { Metadata } from "next"
 import { Montserrat, Open_Sans } from "next/font/google"
