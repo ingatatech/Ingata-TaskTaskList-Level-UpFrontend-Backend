@@ -21,9 +21,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { ClipboardList, Eye, AlertTriangle, Plus } from "lucide-react"
+import { ClipboardList, Eye, AlertTriangle, Plus, Building2, User, Calendar } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { adminTaskAPI } from "@/lib/api"
+import { adminTaskAPI, userAPI, Department } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 
 interface Task {
@@ -32,7 +32,12 @@ interface Task {
   description?: string | null
   status: "pending" | "completed"
   priority: "low" | "medium" | "high"
-  user: string
+  user: {
+    id?: string
+    email: string
+    role?: "admin" | "user"
+    department?: Department | null
+  } | string
   createdAt: string
   dueDate?: string | null
 }
@@ -45,6 +50,8 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
   const [taskSearchTerm, setTaskSearchTerm] = useState("")
   const [taskStatusFilter, setTaskStatusFilter] = useState("all")
   const [taskPriorityFilter, setTaskPriorityFilter] = useState("all")
+  const [taskDepartmentFilter, setTaskDepartmentFilter] = useState("all") // NEW: Department filter
+  const [taskUserEmailFilter, setTaskUserEmailFilter] = useState("") // NEW: User email filter
 
   const [viewTaskDialog, setViewTaskDialog] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
@@ -63,6 +70,10 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
   const [tasksPerPage] = useState(5)
   const [tasksError, setTasksError] = useState<string | null>(null)
 
+  // NEW: Department state
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [isLoadingDepartments, setIsLoadingDepartments] = useState(false)
+
   const { toast } = useToast()
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
@@ -75,6 +86,21 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
     }
   }))
 
+  // NEW: Fetch departments
+  const fetchDepartments = async () => {
+    setIsLoadingDepartments(true)
+    try {
+      const response = await userAPI.getDepartments()
+      setDepartments(response.departments)
+    } catch (error) {
+      console.error("Failed to fetch departments:", error)
+      // Fallback departments if API fails
+      setDepartments(["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"])
+    } finally {
+      setIsLoadingDepartments(false)
+    }
+  }
+
   const fetchAllTasks = async () => {
     setIsLoading(true)
     setTasksError(null)
@@ -82,6 +108,8 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
       const filters = {
         title: taskSearchTerm || undefined,
         status: taskStatusFilter === "all" ? undefined : taskStatusFilter,
+        department: taskDepartmentFilter === "all" ? undefined : (taskDepartmentFilter as Department), // NEW: Department filter
+        userEmail: taskUserEmailFilter || undefined, // NEW: User email filter
       };
 
       const response = await adminTaskAPI.getAllTasks(tasksCurrentPage, tasksPerPage, filters)
@@ -108,15 +136,20 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
     }
   }
 
+  // NEW: Fetch departments on mount
+  useEffect(() => {
+    fetchDepartments()
+  }, [])
+
   useEffect(() => {
     if (user?.role === "admin") {
       fetchAllTasks()
     }
-  }, [user, tasksCurrentPage, taskSearchTerm, taskStatusFilter])
+  }, [user, tasksCurrentPage, taskSearchTerm, taskStatusFilter, taskDepartmentFilter, taskUserEmailFilter]) // UPDATED: Added new filters
 
   useEffect(() => {
     setTasksCurrentPage(1)
-  }, [taskSearchTerm, taskStatusFilter])
+  }, [taskSearchTerm, taskStatusFilter, taskDepartmentFilter, taskUserEmailFilter]) // UPDATED: Added new filters
 
   const handleAddTask = async () => {
     if (!newTaskTitle || !newTaskPriority || !newTaskAssignedUser) {
@@ -167,6 +200,17 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
   const handleViewTask = (task: Task) => {
     setSelectedTask(task)
     setViewTaskDialog(true)
+  }
+
+  // NEW: Format date helper
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   }
 
   const totalTasksPages = Math.ceil(totalTasksCount / tasksPerPage)
@@ -256,6 +300,7 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
         }}
       />
 
+      {/* UPDATED: Search filters with department and user email */}
       <SearchFilters
         searchValue={taskSearchTerm}
         onSearchChange={setTaskSearchTerm}
@@ -271,7 +316,19 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
               { value: "completed", label: "Completed" },
             ],
           },
+          // NEW: Department filter
+          {
+            value: taskDepartmentFilter,
+            onValueChange: setTaskDepartmentFilter,
+            placeholder: "Filter by department",
+            options: [
+              { value: "all", label: "All Departments" },
+              ...departments.map(dept => ({ value: dept, label: dept })),
+              { value: "null", label: "No Department" },
+            ],
+          },
         ]}
+        
       />
 
       {tasksError ? (
@@ -301,7 +358,7 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
           <ClipboardList className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
           <p className="text-muted-foreground">No tasks found</p>
           <p className="text-sm text-muted-foreground mt-1">
-            {taskSearchTerm || taskStatusFilter !== "all" || taskPriorityFilter !== "all"
+            {taskSearchTerm || taskStatusFilter !== "all" || taskPriorityFilter !== "all" || taskDepartmentFilter !== "all" || taskUserEmailFilter
               ? "Try adjusting your search filters"
               : "Tasks will appear here once users create them"}
           </p>
@@ -314,6 +371,7 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
             columns={[
               { key: "title", label: "Task" },
               { key: "user", label: "User" },
+              { key: "department", label: "Department" }, // NEW: Department column
               { key: "status", label: "Status" },
               { key: "createdAt", label: "Created" },
               { key: "actions", label: "Actions", className: "text-right" },
@@ -324,11 +382,41 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
                 case "title":
                   return <span className="font-medium">{String(task?.title || "Untitled Task")}</span>;
                 case "user":
-                  return <span className="text-sm">{String(task?.user?.email || task?.user || "Unknown User")}</span>;
+                  return (
+                    <div className="flex items-center space-x-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">
+                          {typeof task?.user === 'object' ? task?.user?.email : String(task?.user || "Unknown User")}
+                        </p>
+                        {typeof task?.user === 'object' && task?.user?.role && (
+                          <p className="text-xs text-muted-foreground capitalize">{task.user.role}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                // NEW: Department display
+                case "department":
+                  return (
+                    <div className="flex items-center space-x-1">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        {typeof task?.user === 'object' && task?.user?.department 
+                          ? task.user.department 
+                          : <span className="text-muted-foreground italic">No department</span>
+                        }
+                      </span>
+                    </div>
+                  );
                 case "status":
                   return <StatusBadge status={(task?.status as "pending" | "completed") || "pending"} />;
                 case "createdAt":
-                  return <span className="text-sm">{String(task?.createdAt || "Unknown")}</span>;
+                  return (
+                    <div className="flex items-center space-x-1">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{formatDate(String(task?.createdAt || "Unknown"))}</span>
+                    </div>
+                  );
                 case "actions":
                   return (
                     <div className="flex items-center justify-end space-x-2">
@@ -357,45 +445,91 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
         </>
       )}
 
+      {/* UPDATED: View Task Dialog with Department Info */}
       <Dialog open={viewTaskDialog} onOpenChange={setViewTaskDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-serif">Task Details</DialogTitle>
             <DialogDescription>View task information and details</DialogDescription>
           </DialogHeader>
           {selectedTask && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Title</Label>
-                <p className="text-sm text-muted-foreground">{selectedTask.title}</p>
-              </div>
-              {selectedTask.description && (
+            <div className="space-y-6">
+              {/* Task Information */}
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Description</Label>
-                  <p className="text-sm text-muted-foreground">{selectedTask.description}</p>
+                  <Label className="text-sm font-medium">Title</Label>
+                  <p className="text-lg font-semibold">{selectedTask.title}</p>
                 </div>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium">Assigned User</Label>
-                  <p className="text-sm text-muted-foreground">{(selectedTask.user as any)?.email || selectedTask.user}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Status</Label>
-                  <div className="mt-1">
-                    <StatusBadge status={selectedTask.status} />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Created</Label>
-                  <p className="text-sm text-muted-foreground">{selectedTask.createdAt}</p>
-                </div>
-                {selectedTask.dueDate && (
-                  <div>
-                    <Label className="text-sm font-medium">Due Date</Label>
-                    <p className="text-sm text-muted-foreground">{selectedTask.dueDate}</p>
+                {selectedTask.description && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Description</Label>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{selectedTask.description}</p>
                   </div>
                 )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium">Status</Label>
+                    <div className="mt-1">
+                      <StatusBadge status={selectedTask.status} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Created</Label>
+                    <div className="flex items-center space-x-1 mt-1">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">{formatDate(selectedTask.createdAt)}</p>
+                    </div>
+                  </div>
+                  {selectedTask.dueDate && (
+                    <div>
+                      <Label className="text-sm font-medium">Due Date</Label>
+                      <p className="text-sm text-muted-foreground">{selectedTask.dueDate}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* User Information */}
+              <div className="border-t pt-4">
+                <Label className="text-sm font-medium mb-3 block">Assigned User</Label>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Email</Label>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <p className="text-sm font-medium">
+                          {typeof selectedTask.user === 'object' ? selectedTask.user?.email : String(selectedTask.user)}
+                        </p>
+                      </div>
+                    </div>
+                    {typeof selectedTask.user === 'object' && selectedTask.user?.role && (
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Role</Label>
+                        <p className="text-sm capitalize mt-1">{selectedTask.user.role}</p>
+                      </div>
+                    )}
+                    {/* NEW: Department display in task view */}
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Department</Label>
+                      <div className="flex items-center space-x-1 mt-1">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <p className="text-sm">
+                          {typeof selectedTask.user === 'object' && selectedTask.user?.department
+                            ? selectedTask.user.department 
+                            : <span className="text-muted-foreground italic">No department</span>
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    {typeof selectedTask.user === 'object' && selectedTask.user?.id && (
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">User ID</Label>
+                        <p className="text-sm text-muted-foreground mt-1 font-mono">{selectedTask.user.id}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}

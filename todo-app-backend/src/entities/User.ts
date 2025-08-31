@@ -1,4 +1,4 @@
-// ===== 1. MODIFIED entities/User.ts =====
+// entities/User.ts
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Task } from './Task';
 
@@ -27,21 +27,27 @@ export class User {
   })
   status!: "active" | "inactive";
 
+  // NEW: Department field
+  @Column({
+    type: "enum",
+    enum: ["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"],
+    nullable: true
+  })
+  department!: "IT" | "HR" | "Finance" | "Marketing" | "Operations" | "Sales" | "Support" | null;
+
   @Column({ type: 'varchar', nullable: true })
   otp!: string | null;
 
   @Column({ type: 'timestamp', nullable: true })
   otpExpiry!: Date | null;
 
-  // NEW FIELD FOR FIRST LOGIN CHECK
   @Column({ default: true })
   isFirstLogin!: boolean;
 
-  // NEW FIELD FOR TEMP RANDOM PASSWORD
   @Column({ type: 'varchar', nullable: true })
   tempPassword!: string | null;
 
-  @OneToMany(() => Task, (task) => task.user, { cascade: true }) // CASCADE DELETE FIX
+  @OneToMany(() => Task, (task) => task.user, { cascade: true })
   tasks!: Task[];
 
   @CreateDateColumn()

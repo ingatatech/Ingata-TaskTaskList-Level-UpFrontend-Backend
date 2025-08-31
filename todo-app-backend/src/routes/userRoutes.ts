@@ -1,4 +1,4 @@
-// ===== BACKEND: Modified routes/userRoutes.ts =====
+// routes/userRoutes.ts
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../app';
 import { User } from '../entities/User';
@@ -24,13 +24,13 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// *** NEW: CHECK ADMIN EXISTS ENDPOINT ***
+// CHECK ADMIN EXISTS ENDPOINT
 router.get('/admin/exists', async (req: Request, res: Response) => {
   try {
     const userRepository = AppDataSource.getRepository(User);
     const adminExists = await userRepository.findOne({ 
       where: { role: 'admin' },
-      select: ['id'] // Only select id for performance
+      select: ['id']
     });
     
     res.status(200).json({ 
@@ -43,11 +43,30 @@ router.get('/admin/exists', async (req: Request, res: Response) => {
   }
 });
 
-// *** UPDATED: CREATE USER WITH ADMIN CHECK LOGIC ***
+// NEW: GET AVAILABLE DEPARTMENTS
+router.get('/departments', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const departments = ["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"];
+    res.status(200).json({ departments });
+  } catch (error) {
+    console.error('Error fetching departments:', error);
+    res.status(500).json({ message: 'Server error', error });
+  }
+});
+
+// UPDATED: CREATE USER WITH DEPARTMENT
 router.post('/users/create', async (req: Request, res: Response) => {
   try {
-    const { email, role } = req.body;
+    const { email, role, department } = req.body;
     const userRepository = AppDataSource.getRepository(User);
+
+    // Validate department if provided
+    const validDepartments = ["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"];
+    if (department && !validDepartments.includes(department)) {
+      return res.status(400).json({ 
+        message: 'Invalid department. Valid departments are: ' + validDepartments.join(', ') 
+      });
+    }
 
     // Check if user already exists
     const existingUser = await userRepository.findOne({ where: { email } });
@@ -55,23 +74,20 @@ router.post('/users/create', async (req: Request, res: Response) => {
       return res.status(409).json({ message: 'User with this email already exists.' });
     }
 
-    // *** NEW LOGIC: Check if admin already exists ***
+    // Check if admin already exists
     const adminExists = await userRepository.findOne({ 
       where: { role: 'admin' },
       select: ['id']
     });
 
     // Determine final role based on admin existence
-    let finalRole: 'admin' | 'user' = 'user'; // Default to user
+    let finalRole: 'admin' | 'user' = 'user';
     
     if (!adminExists) {
-      // No admin exists, allow the requested role (admin or user)
       finalRole = role && (role === 'admin' || role === 'user') ? role : 'user';
     } else {
-      // Admin exists, force role to be 'user'
       finalRole = 'user';
       
-      // If they tried to create an admin when one exists, return warning
       if (role === 'admin') {
         return res.status(400).json({ 
           message: 'Cannot create admin user. An administrator already exists in the system.',
@@ -84,10 +100,11 @@ router.post('/users/create', async (req: Request, res: Response) => {
     const tempPassword = crypto.randomBytes(8).toString('hex');
     const hashedTempPassword = await hashPassword(tempPassword);
 
-    // Create user with determined role
+    // Create user with department
     const user = userRepository.create({
       email,
       role: finalRole,
+      department: department || null, // Include department
       password: hashedTempPassword,
       isFirstLogin: true,
       otp: null,
@@ -110,6 +127,7 @@ router.post('/users/create', async (req: Request, res: Response) => {
             <li><strong>Email:</strong> ${email}</li>
             <li><strong>Temporary Password:</strong> ${tempPassword}</li>
             <li><strong>Role:</strong> ${finalRole}</li>
+            ${department ? `<li><strong>Department:</strong> ${department}</li>` : ''}
           </ul>
           <p><em>Note: You will be required to set a new password after your first login.</em></p>
           <p>Please login at: <a href="${process.env.FRONTEND_URL}/auth/login">${process.env.FRONTEND_URL}/auth/login</a></p>
@@ -128,6 +146,7 @@ router.post('/users/create', async (req: Request, res: Response) => {
       user: { 
         email: user.email, 
         role: user.role,
+        department: user.department,
         assignedRole: finalRole,
         adminExists: !!adminExists
       }
@@ -138,7 +157,6 @@ router.post('/users/create', async (req: Request, res: Response) => {
   }
 });
 
-// ... (rest of the routes remain the same)
 // COUNT ALL USERS
 router.get('/users/count', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -161,16 +179,17 @@ router.get('/users/count/active', authMiddleware, adminMiddleware, async (req: A
   }
 });
 
-// GET PAGINATED USERS
+// UPDATED: GET PAGINATED USERS WITH DEPARTMENT FILTERING
 router.get('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { page = 1, limit = 5, email, role, status } = req.query;
+    const { page = 1, limit = 5, email, role, status, department } = req.query;
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
 
     let whereCondition: any = {};
     if (email) whereCondition.email = ILike(`%${email}%`);
     if (role) whereCondition.role = role;
     if (status) whereCondition.status = status;
+    if (department) whereCondition.department = department; // NEW: Department filtering
 
     const [users, total] = await AppDataSource.getRepository(User).findAndCount({
       where: whereCondition,
@@ -203,17 +222,26 @@ router.get('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReques
   }
 });
 
-// UPDATE USER
+// UPDATED: UPDATE USER WITH DEPARTMENT
 router.put('/users/:id', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { email, role, status } = req.body;
+    const { email, role, status, department } = req.body;
     const userRepository = AppDataSource.getRepository(User);
     const userToUpdate = await userRepository.findOne({ where: { id: req.params.id } });
     if (!userToUpdate) return res.status(404).json({ message: 'User not found.' });
 
+    // Validate department if provided
+    const validDepartments = ["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"];
+    if (department && !validDepartments.includes(department)) {
+      return res.status(400).json({ 
+        message: 'Invalid department. Valid departments are: ' + validDepartments.join(', ') 
+      });
+    }
+
     userToUpdate.email = email ?? userToUpdate.email;
     userToUpdate.role = role ?? userToUpdate.role;
     userToUpdate.status = status ?? userToUpdate.status;
+    userToUpdate.department = department ?? userToUpdate.department; // NEW: Update department
 
     await userRepository.save(userToUpdate);
     res.status(200).json({ message: 'User updated successfully.', user: userToUpdate });
@@ -230,7 +258,7 @@ router.delete('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReq
     const user = await userRepository.findOne({ where: { id: req.params.id } });
     if (!user) return res.status(404).json({ message: 'User not found.' });
 
-    await userRepository.remove(user); // Tasks will be deleted automatically because of cascade
+    await userRepository.remove(user);
     res.status(200).json({ message: 'User deleted successfully.' });
   } catch (error) {
     console.error(error);

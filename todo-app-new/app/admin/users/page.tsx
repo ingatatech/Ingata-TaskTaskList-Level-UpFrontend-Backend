@@ -1,4 +1,4 @@
-// admin/users/page.tsx
+// app/admin/users/page.tsx
 "use client"
 
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react"
@@ -31,9 +31,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { UserPlus, Mail, Edit, Trash2, Eye, AlertTriangle, Info } from "lucide-react"
+import { UserPlus, Mail, Edit, Trash2, Eye, AlertTriangle, Info, Building2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { userAPI, authApi } from "@/lib/api"
+import { userAPI, authApi, Department } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 
 interface User {
@@ -42,6 +42,7 @@ interface User {
   email: string
   role: "admin" | "user"
   status: "active" | "inactive"
+  department?: Department | null
   tasks: number
   createdAt: string
 }
@@ -53,9 +54,13 @@ interface UserManagementRef {
 const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [filterRole, setFilterRole] = useState("all") // NEW: Role filter
+  const [filterDepartment, setFilterDepartment] = useState("all") // NEW: Department filter
+  
   const [newUserName, setNewUserName] = useState("")
   const [newUserEmail, setNewUserEmail] = useState("")
   const [newUserRole, setNewUserRole] = useState("")
+  const [newUserDepartment, setNewUserDepartment] = useState("none") // FIXED: Changed from "" to "none"
 
   const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false)
   const [editUserDialog, setEditUserDialog] = useState(false)
@@ -65,6 +70,7 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
   const [editUserEmail, setEditUserEmail] = useState("")
   const [editUserRole, setEditUserRole] = useState("")
   const [editUserStatus, setEditUserStatus] = useState("")
+  const [editUserDepartment, setEditUserDepartment] = useState("none") // FIXED: Changed from "" to "none"
 
   const [users, setUsers] = useState<User[]>([])
   const [totalUsersCount, setTotalUsersCount] = useState(0)
@@ -72,11 +78,15 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
   const [usersPerPage] = useState(5)
   const [usersError, setUsersError] = useState<string | null>(null)
 
+  // NEW: Department state
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [isLoadingDepartments, setIsLoadingDepartments] = useState(false)
+
   const { toast } = useToast()
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
 
-  // *** ADMIN CHECK STATE ***
+  // Admin check state
   const [adminExists, setAdminExists] = useState<boolean | null>(null)
   const [canAssignAdmin, setCanAssignAdmin] = useState(false)
   const [isCheckingAdmin, setIsCheckingAdmin] = useState(false)
@@ -89,7 +99,21 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
     }
   }))
 
-  // *** NEW FUNCTION: Check if admin exists ***
+  // NEW: Fetch departments
+  const fetchDepartments = async () => {
+    setIsLoadingDepartments(true)
+    try {
+      const response = await userAPI.getDepartments()
+      setDepartments(response.departments)
+    } catch (error) {
+      console.error("Failed to fetch departments:", error)
+      // Fallback departments if API fails
+      setDepartments(["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"])
+    } finally {
+      setIsLoadingDepartments(false)
+    }
+  }
+
   const checkAdminExists = async () => {
     setIsCheckingAdmin(true)
     try {
@@ -97,13 +121,11 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
       setAdminExists(response.adminExists)
       setCanAssignAdmin(response.canAssignAdmin)
       
-      // If admin exists and current role selection is admin, reset to user
       if (response.adminExists && newUserRole === "admin") {
         setNewUserRole("user")
       }
     } catch (error) {
       console.error("Failed to check admin existence:", error)
-      // Default to safe state - assume admin exists
       setAdminExists(true)
       setCanAssignAdmin(false)
       setNewUserRole("user")
@@ -112,6 +134,7 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
     }
   }
 
+  // UPDATED: Fetch users with department filter
   const fetchUsers = async () => {
     setIsLoading(true)
     setUsersError(null)
@@ -119,6 +142,8 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
       const response = await userAPI.getUsers(usersCurrentPage, usersPerPage, {
         email: searchTerm,
         status: filterStatus === "all" ? undefined : filterStatus,
+        role: filterRole === "all" ? undefined : filterRole,
+        department: filterDepartment === "all" ? undefined : (filterDepartment as Department),
       })
       
       if (!response) {
@@ -143,10 +168,10 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
     }
   }
 
-  // *** UPDATED: Check admin existence when dialog opens ***
   useEffect(() => {
     if (isCreateUserDialogOpen) {
       checkAdminExists()
+      fetchDepartments() // NEW: Fetch departments when dialog opens
     }
   }, [isCreateUserDialogOpen])
 
@@ -154,12 +179,18 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
     if (user?.role === "admin") {
       fetchUsers()
     }
-  }, [user, usersCurrentPage, searchTerm, filterStatus])
+  }, [user, usersCurrentPage, searchTerm, filterStatus, filterRole, filterDepartment]) // NEW: Added department dependency
 
   useEffect(() => {
     setUsersCurrentPage(1)
-  }, [searchTerm, filterStatus])
+  }, [searchTerm, filterStatus, filterRole, filterDepartment]) // NEW: Reset page on filter change
 
+  // NEW: Fetch departments on component mount
+  useEffect(() => {
+    fetchDepartments()
+  }, [])
+
+  // UPDATED: Handle add user with department
   const handleAddUser = async () => {
     if (!newUserName || !newUserEmail || !newUserRole) {
       toast({
@@ -170,7 +201,6 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
       return
     }
 
-    // *** FRONTEND VALIDATION: Prevent admin creation if admin exists ***
     if (adminExists && newUserRole === "admin") {
       toast({
         title: "Cannot Create Admin",
@@ -182,11 +212,16 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
 
     try {
       setIsLoading(true)
-      await userAPI.createUser(newUserEmail, newUserRole as "admin" | "user")
+      await userAPI.createUser(
+        newUserEmail, 
+        newUserRole as "admin" | "user",
+        newUserDepartment && newUserDepartment !== "none" ? (newUserDepartment as Department) : undefined // FIXED: Handle "none" value
+      )
 
       setNewUserName("")
       setNewUserEmail("")
       setNewUserRole("")
+      setNewUserDepartment("none") // FIXED: Reset to "none" instead of ""
       setIsCreateUserDialogOpen(false)
 
       toast({
@@ -195,7 +230,6 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
       })
 
       fetchUsers()
-      // Refresh admin check after user creation
       checkAdminExists()
     } catch (error) {
       toast({
@@ -208,6 +242,7 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
     }
   }
 
+  // UPDATED: Handle update user with department
   const handleUpdateUser = async () => {
     if (!selectedUser || !selectedUser.id) {
       toast({
@@ -224,6 +259,7 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
         email: editUserEmail,
         role: editUserRole as "admin" | "user",
         status: editUserStatus as "active" | "inactive",
+        department: editUserDepartment && editUserDepartment !== "none" ? (editUserDepartment as Department) : null, // FIXED: Handle "none" value
       })
 
       setEditUserDialog(false)
@@ -256,7 +292,6 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
       })
 
       fetchUsers()
-      // Refresh admin check after user deletion (in case admin was deleted)
       checkAdminExists()
     } catch (error) {
       toast({
@@ -274,12 +309,14 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
     setViewUserDialog(true)
   }
 
+  // UPDATED: Handle edit user with department
   const handleEditUser = (user: User) => {
     setSelectedUser(user)
     setEditUserName(user.name ?? "")
     setEditUserEmail(user.email)
     setEditUserRole(user.role)
     setEditUserStatus(user.status)
+    setEditUserDepartment(user.department || "none") // FIXED: Use "none" instead of ""
     setEditUserDialog(true)
   }
 
@@ -307,7 +344,7 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
                   <DialogDescription>Send an OTP invitation to create a new user account</DialogDescription>
                 </DialogHeader>
                 
-                {/* *** NEW: Admin Status Info Card *** */}
+                {/* Admin Status Info Card */}
                 {isCheckingAdmin ? (
                   <Card className="bg-blue-50 border-blue-200">
                     <CardContent className="p-3">
@@ -359,6 +396,32 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
                       onChange={(e) => setNewUserEmail(e.target.value)}
                     />
                   </div>
+                  
+                  {/* FIXED: Department Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="user-department">Department</Label>
+                    <Select 
+                      value={newUserDepartment} 
+                      onValueChange={setNewUserDepartment}
+                      disabled={isLoadingDepartments}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No Department</SelectItem>
+                        {departments.map((dept) => (
+                          <SelectItem key={dept} value={dept}>
+                            <div className="flex items-center space-x-2">
+                              <Building2 className="h-4 w-4" />
+                              <span>{dept}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="user-role">
                       Role {adminExists && <span className="text-xs text-amber-600">(Admin role unavailable)</span>}
@@ -373,7 +436,6 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="user">User</SelectItem>
-                        {/* *** CONDITIONAL: Only show Admin option if no admin exists *** */}
                         {canAssignAdmin && (
                           <SelectItem value="admin">Admin</SelectItem>
                         )}
@@ -395,19 +457,41 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
         }}
       />
 
+      {/* UPDATED: Search filters with department */}
       <SearchFilters
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}
-        searchPlaceholder="Search users by email or role..."
+        searchPlaceholder="Search users by email..."
         filters={[
           {
             value: filterStatus,
             onValueChange: setFilterStatus,
             placeholder: "Filter by status",
             options: [
-              { value: "all", label: "All Users" },
+              { value: "all", label: "All Statuses" },
               { value: "active", label: "Active" },
               { value: "inactive", label: "Inactive" },
+            ],
+          },
+          {
+            value: filterRole,
+            onValueChange: setFilterRole,
+            placeholder: "Filter by role",
+            options: [
+              { value: "all", label: "All Roles" },
+              { value: "admin", label: "Admin" },
+              { value: "user", label: "User" },
+            ],
+          },
+          // NEW: Department filter
+          {
+            value: filterDepartment,
+            onValueChange: setFilterDepartment,
+            placeholder: "Filter by department",
+            options: [
+              { value: "all", label: "All Departments" },
+              ...departments.map(dept => ({ value: dept, label: dept })),
+              { value: "null", label: "No Department" },
             ],
           },
         ]}
@@ -442,6 +526,7 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
             columns={[
               { key: "email", label: "Email" },
               { key: "role", label: "Role" },
+              { key: "department", label: "Department" }, // NEW: Department column
               { key: "status", label: "Status" },
               { key: "tasks", label: "Tasks" },
               { key: "createdAt", label: "Created" },
@@ -462,6 +547,16 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
                         </span>
                       )}
                     </span>
+                  )
+                // NEW: Department display
+                case "department":
+                  return (
+                    <div className="flex items-center space-x-1">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        {user?.department || <span className="text-muted-foreground italic">No department</span>}
+                      </span>
+                    </div>
                   )
                 case "status":
                   return <StatusBadge status={(user?.status as "active" | "inactive") || "inactive"} />
@@ -533,6 +628,7 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
         </>
       )}
 
+      {/* UPDATED: View User Dialog with Department */}
       <Dialog open={viewUserDialog} onOpenChange={setViewUserDialog}>
         <DialogContent>
           <DialogHeader>
@@ -549,6 +645,16 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
                 <div>
                   <Label className="text-sm font-medium">Email</Label>
                   <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
+                </div>
+                {/* NEW: Department display in view dialog */}
+                <div>
+                  <Label className="text-sm font-medium">Department</Label>
+                  <div className="flex items-center space-x-1 mt-1">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      {selectedUser.department || "No department assigned"}
+                    </p>
+                  </div>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Status</Label>
@@ -574,6 +680,7 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
         </DialogContent>
       </Dialog>
 
+      {/* FIXED: Edit User Dialog with Department */}
       <Dialog open={editUserDialog} onOpenChange={setEditUserDialog}>
         <DialogContent>
           <DialogHeader>
@@ -594,6 +701,28 @@ const UserManagementPage = forwardRef<UserManagementRef>((props, ref) => {
                 onChange={(e) => setEditUserEmail(e.target.value)}
               />
             </div>
+            
+            {/* FIXED: Department editing */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-user-department">Department</Label>
+              <Select value={editUserDepartment} onValueChange={setEditUserDepartment}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Department</SelectItem>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept} value={dept}>
+                      <div className="flex items-center space-x-2">
+                        <Building2 className="h-4 w-4" />
+                        <span>{dept}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="edit-user-role">Role</Label>
               <Select value={editUserRole} onValueChange={setEditUserRole}>

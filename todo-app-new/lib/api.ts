@@ -1,12 +1,13 @@
 //lib/api.ts
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
 
-// Types based on backend entities
+// UPDATED: Types with department support
 export interface User {
   id: string
   email: string
   role: "admin" | "user"
   status: "active" | "inactive"
+  department?: "IT" | "HR" | "Finance" | "Marketing" | "Operations" | "Sales" | "Support" | null
   createdAt: string
   updatedAt: string
 }
@@ -22,11 +23,14 @@ export interface Task {
 }
 
 export interface ApiResponse<T> {
+  data: T
+  message?: string
   total?: number
   page?: number
   limit?: number
-  data: T
 }
+
+export type Department = "IT" | "HR" | "Finance" | "Marketing" | "Operations" | "Sales" | "Support"
 
 // Helper function to get auth headers
 const getAuthHeaders = () => {
@@ -37,9 +41,8 @@ const getAuthHeaders = () => {
   }
 }
 
-// *** UPDATED AUTH API FOR NEW FLOW ***
+// AUTH API
 export const authApi = {
-  // Login - now handles first login detection
   login: async (email: string, password: string) => {
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: "POST",
@@ -55,7 +58,6 @@ export const authApi = {
     return response.json()
   },
 
-  // *** NEW: First login password reset initiation ***
   initiateFirstLoginReset: async (email: string) => {
     const response = await fetch(`${API_BASE_URL}/auth/first-login-reset`, {
       method: "POST",
@@ -72,19 +74,18 @@ export const authApi = {
   },
 
   checkAdminExists: async () => {
-  const response = await fetch(`${API_BASE_URL}/admin/admin/exists`, {
-    headers: getAuthHeaders(),
-  })
+    const response = await fetch(`${API_BASE_URL}/admin/admin/exists`, {
+      headers: getAuthHeaders(),
+    })
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to check admin existence")
-  }
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to check admin existence")
+    }
 
-  return response.json() as Promise<{ adminExists: boolean; canAssignAdmin: boolean }>
-},
+    return response.json() as Promise<{ adminExists: boolean; canAssignAdmin: boolean }>
+  },
 
-  // *** NEW: Regular forgot password (for existing users) ***
   forgotPassword: async (email: string) => {
     const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
       method: "POST",
@@ -100,7 +101,6 @@ export const authApi = {
     return response.json()
   },
 
-  // *** UPDATED: OTP verification only (separated from password setting) ***
   verifyOtp: async (email: string, otp: string, type: "first-login" | "forgot-password" = "first-login") => {
     const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
       method: "POST",
@@ -116,7 +116,6 @@ export const authApi = {
     return response.json()
   },
 
-  // *** NEW: Set new password (after OTP verification) ***
   setNewPassword: async (email: string, otp: string, newPassword: string, type: "first-login" | "forgot-password" = "first-login") => {
     const response = await fetch(`${API_BASE_URL}/auth/set-new-password`, {
       method: "POST",
@@ -133,13 +132,28 @@ export const authApi = {
   },
 }
 
-// User API (Admin)
+// UPDATED: User API with department support
 export const userApi = {
-  createUser: async (email: string, role: "admin" | "user" = "user") => {
+  // NEW: Get available departments
+  getDepartments: async () => {
+    const response = await fetch(`${API_BASE_URL}/admin/departments`, {
+      headers: getAuthHeaders(),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to fetch departments")
+    }
+
+    return response.json() as Promise<{ departments: Department[] }>
+  },
+
+  // UPDATED: Create user with department
+  createUser: async (email: string, role: "admin" | "user" = "user", department?: Department) => {
     const response = await fetch(`${API_BASE_URL}/admin/users/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email, role, department }),
     })
 
     if (!response.ok) {
@@ -150,7 +164,13 @@ export const userApi = {
     return response.json()
   },
 
-  getUsers: async (page = 1, limit = 5, filters: { email?: string; role?: string; status?: string } = {}) => {
+  // UPDATED: Get users with department filtering
+  getUsers: async (page = 1, limit = 5, filters: { 
+    email?: string; 
+    role?: string; 
+    status?: string; 
+    department?: Department 
+  } = {}) => {
     const params = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
@@ -182,7 +202,8 @@ export const userApi = {
     return response.json() as Promise<User>
   },
 
-  updateUser: async (id: string, data: Partial<Pick<User, "email" | "role" | "status">>) => {
+  // UPDATED: Update user with department
+  updateUser: async (id: string, data: Partial<Pick<User, "email" | "role" | "status" | "department">>) => {
     const response = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
       method: "PUT",
       headers: getAuthHeaders(),
@@ -291,9 +312,14 @@ export const taskApi = {
   },
 }
 
-// Admin Task API
+// UPDATED: Admin Task API with department filtering
 export const adminTaskApi = {
-  getAllTasks: async (page = 1, limit = 5, filters: { status?: string; title?: string } = {}) => {
+  getAllTasks: async (page = 1, limit = 5, filters: { 
+    status?: string; 
+    title?: string; 
+    department?: Department;
+    userEmail?: string;
+  } = {}) => {
     const params = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
@@ -329,6 +355,20 @@ export const adminTaskApi = {
     }
 
     return response.json() as Promise<ApiResponse<Task[]>>
+  },
+
+  // NEW: Get department statistics
+  getDepartmentStats: async () => {
+    const response = await fetch(`${API_BASE_URL}/admin/tasks/stats/department`, {
+      headers: getAuthHeaders(),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to fetch department statistics")
+    }
+
+    return response.json()
   },
 }
 
