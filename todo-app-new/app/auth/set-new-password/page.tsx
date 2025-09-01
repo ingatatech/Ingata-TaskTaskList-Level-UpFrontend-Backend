@@ -1,7 +1,7 @@
 // app/auth/set-new-password/page.tsx
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,7 +15,8 @@ import { authApi } from "@/lib/api"
 
 const strong = (pwd: string) => /^(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/.test(pwd)
 
-export default function SetNewPasswordPage() {
+// Component that uses useSearchParams
+function SetPasswordForm() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { toast } = useToast()
@@ -66,6 +67,93 @@ export default function SetNewPasswordPage() {
   }
 
   return (
+    <Card className="shadow-xl border-primary/10">
+      <CardHeader className="text-center pb-6">
+        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+          <Key className="h-6 w-6 text-primary" />
+        </div>
+        <CardTitle className="font-serif text-2xl">Set New Password</CardTitle>
+        <CardDescription className="text-base">
+          Create a strong password to secure your account
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6 text-sm text-blue-700 flex">
+          <AlertCircle className="h-4 w-4 mr-2 mt-0.5 text-blue-600" />
+          Use at least 8 characters, 1 uppercase, 1 number, and 1 special character.
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="new-password" className="font-medium">New Password</Label>
+            <Input
+              id="new-password"
+              type="password"
+              placeholder="Create a secure password"
+              className="h-11"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password" className="font-medium">Confirm Password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              placeholder="Re-enter your password"
+              className="h-11"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          <Button type="submit" className="w-full font-medium h-11 mt-6" disabled={isLoading}>
+            {isLoading ? "Saving..." : "Save Password"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Loading fallback
+function LoadingFallback() {
+  return (
+    <Card className="shadow-xl border-primary/10">
+      <CardHeader className="text-center pb-6">
+        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+          <Key className="h-6 w-6 text-primary animate-pulse" />
+        </div>
+        <CardTitle className="font-serif text-2xl">Loading...</CardTitle>
+        <CardDescription className="text-base">
+          Preparing password form
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
+          <div className="h-4 bg-blue-200 animate-pulse rounded"></div>
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="h-5 bg-muted animate-pulse rounded w-28"></div>
+            <div className="h-11 bg-muted animate-pulse rounded"></div>
+          </div>
+          <div className="space-y-2">
+            <div className="h-5 bg-muted animate-pulse rounded w-32"></div>
+            <div className="h-11 bg-muted animate-pulse rounded"></div>
+          </div>
+          <div className="h-11 bg-muted animate-pulse rounded mt-6"></div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+export default function SetNewPasswordPage() {
+  return (
     <div className="min-h-screen bg-gradient-to-br from-background via-card to-background">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
@@ -92,55 +180,9 @@ export default function SetNewPasswordPage() {
             </Button>
           </div>
 
-          <Card className="shadow-xl border-primary/10">
-            <CardHeader className="text-center pb-6">
-              <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Key className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle className="font-serif text-2xl">Set New Password</CardTitle>
-              <CardDescription className="text-base">
-                Create a strong password to secure your account
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6 text-sm text-blue-700 flex">
-                <AlertCircle className="h-4 w-4 mr-2 mt-0.5 text-blue-600" />
-                Use at least 8 characters, 1 uppercase, 1 number, and 1 special character.
-              </div>
-
-              <form onSubmit={onSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="new-password" className="font-medium">New Password</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    placeholder="Create a secure password"
-                    className="h-11"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password" className="font-medium">Confirm Password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    placeholder="Re-enter your password"
-                    className="h-11"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <Button type="submit" className="w-full font-medium h-11 mt-6" disabled={isLoading}>
-                  {isLoading ? "Saving..." : "Save Password"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+          <Suspense fallback={<LoadingFallback />}>
+            <SetPasswordForm />
+          </Suspense>
         </div>
       </main>
     </div>
