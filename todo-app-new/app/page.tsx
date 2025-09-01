@@ -4,19 +4,12 @@ import type React from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle2, Users, ClipboardList, Shield, ArrowRight, Star, Zap } from "lucide-react"
+import { CheckCircle2, Users, ClipboardList, Shield, ArrowRight, Star } from "lucide-react"
 
 export default function HomePage() {
-  const scrollToAuth = () => {
-    const authSection = document.getElementById("auth-section")
-    if (authSection) {
-      authSection.scrollIntoView({ behavior: "smooth" })
-    }
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-card to-background">
-      {/* Header - Changed from sticky to fixed */}
+      {/* Header - fixed with Login button */}
       <header className="border-b bg-card/50 backdrop-blur-sm fixed top-0 left-0 right-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -26,15 +19,20 @@ export default function HomePage() {
               </div>
               <h1 className="text-2xl font-serif font-bold text-foreground">TaskFlow</h1>
             </div>
-            <Badge variant="secondary" className="font-medium">
-              Professional Edition
-            </Badge>
+            <div className="flex items-center space-x-4">
+              <Badge variant="secondary" className="font-medium">
+                Professional Edition
+              </Badge>
+              <Button asChild size="sm">
+                <a href="/login">Login</a>
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Added a spacer div to prevent content from going under the fixed header */}
-      <div className="pt-20"> {/* This value should match the header's height */}
+      {/* Spacer for fixed header */}
+      <div className="pt-20">
         {/* Main Content */}
         <main className="container mx-auto px-4 py-12">
           <div className="max-w-6xl mx-auto">
@@ -54,12 +52,6 @@ export default function HomePage() {
                 Streamline your productivity with secure OTP authentication, intuitive dashboards, and powerful task
                 management features designed for modern teams.
               </p>
-              <div className="flex justify-center mt-8">
-                <Button size="lg" className="font-medium group" onClick={scrollToAuth}>
-                  Get Started Today
-                  <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </div>
             </div>
 
             {/* Features Grid */}
@@ -123,36 +115,6 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Call to Action Section - Now with separate navigation buttons */}
-            <Card id="auth-section" className="max-w-lg mx-auto shadow-xl border-primary/10">
-              <CardHeader className="text-center pb-6">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Zap className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle className="font-serif text-2xl">Get Started</CardTitle>
-                <CardDescription className="text-base">
-                  Access your dashboard or verify your account to begin managing tasks
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button asChild className="w-full font-medium h-11" size="lg">
-                  <a href="/login">
-                    Sign In to Dashboard
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </a>
-                </Button>
-                <Button asChild variant="outline" className="w-full font-medium h-11" size="lg">
-                  <a href="/auth/otp-verification">
-                    Verify Account (OTP)
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </a>
-                </Button>
-                <p className="text-sm text-center text-muted-foreground mt-4">
-                  New user? Check your email for OTP verification
-                </p>
-              </CardContent>
-            </Card>
-
             {/* Demo Links */}
             <div className="flex flex-col sm:flex-row justify-center gap-4 mt-12">
               <Button variant="outline" size="lg" asChild className="font-medium group bg-transparent">
@@ -168,6 +130,7 @@ export default function HomePage() {
                 </a>
               </Button>
             </div>
+
           </div>
         </main>
 
@@ -181,5 +144,5 @@ export default function HomePage() {
         </footer>
       </div>
     </div>
-    )
+  )
 }

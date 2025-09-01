@@ -1,4 +1,3 @@
-//app/components/sidebar.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -6,7 +5,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
-import { useAuth } from "@/hooks/use-auth" // logout hook
+import { useAuth } from "@/hooks/use-auth"
 import {
   Users,
   ClipboardList,
@@ -53,17 +52,14 @@ export function Sidebar({
   onAddUser,
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false) // New state for mobile menu
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState(activeSectionProp || "overview")
   const { logout } = useAuth()
 
-  // Hook to handle closing the mobile menu when the screen size changes
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 768) { // Tailwind's 'md' breakpoint
-        setIsMobileMenuOpen(false)
-      }
+      if (window.innerWidth >= 768) setIsMobileMenuOpen(false)
     }
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
@@ -126,7 +122,6 @@ export function Sidebar({
       onSectionChange?.("tasks")
       setTimeout(handleAddTask, 100)
     }
-    // Close mobile menu on click
     setIsMobileMenuOpen(false)
   }
 
@@ -216,13 +211,13 @@ export function Sidebar({
 
   return (
     <>
-      {/* Mobile Header (Visible on small screens only) */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-sidebar/50 backdrop-blur-sm fixed top-0 left-0 right-0 z-40">
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between px-4 h-20 border-b bg-sidebar/50 backdrop-blur-sm fixed top-0 left-0 right-0 z-40">
         <div className="flex items-center space-x-3">
-          <div className="h-7 w-7 rounded-lg bg-sidebar-primary flex items-center justify-center">
-            <CheckCircle2 className="h-4 w-4 text-sidebar-primary-foreground" />
+          <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
+            <CheckCircle2 className="h-5 w-5 text-sidebar-primary-foreground" />
           </div>
-          <h1 className="font-serif text-lg font-bold text-sidebar-foreground">TaskFlow</h1>
+          <h1 className="text-2xl font-serif font-bold text-sidebar-foreground leading-none">TaskFlow</h1>
         </div>
         <Button
           variant="ghost"
@@ -234,7 +229,7 @@ export function Sidebar({
         </Button>
       </div>
 
-      {/* Desktop Sidebar (Hidden on mobile) */}
+      {/* Desktop Sidebar */}
       <div
         className={cn(
           "hidden md:flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300",
@@ -243,18 +238,13 @@ export function Sidebar({
         )}
       >
         {/* Sidebar Header */}
-        <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
+        <div className="flex items-center justify-between px-4 h-20 border-b border-sidebar-border">
           {!isCollapsed && (
             <div className="flex items-center space-x-3">
               <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
                 <CheckCircle2 className="h-5 w-5 text-sidebar-primary-foreground" />
               </div>
-              <div>
-                <h2 className="font-serif font-bold text-sidebar-foreground">TaskFlow</h2>
-                <Badge variant="secondary" className="text-xs">
-                  {userRole === "admin" ? "Admin" : "User"}
-                </Badge>
-              </div>
+              <h1 className="text-2xl font-serif font-bold text-sidebar-foreground leading-none">TaskFlow</h1>
             </div>
           )}
           <Button
@@ -288,28 +278,21 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Mobile Menu Drawer (Hidden on desktop) */}
+      {/* Mobile Menu Drawer */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setIsMobileMenuOpen(false)}
           />
-          {/* Menu */}
           <div className="relative flex h-full w-64 flex-col bg-sidebar transition-transform duration-300 animate-slide-in-right">
             {/* Mobile Menu Header */}
-            <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
+            <div className="flex items-center justify-between px-4 h-20 border-b border-sidebar-border">
               <div className="flex items-center space-x-3">
                 <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
                   <CheckCircle2 className="h-5 w-5 text-sidebar-primary-foreground" />
                 </div>
-                <div>
-                  <h2 className="font-serif font-bold text-sidebar-foreground">TaskFlow</h2>
-                  <Badge variant="secondary" className="text-xs">
-                    {userRole === "admin" ? "Admin" : "User"}
-                  </Badge>
-                </div>
+                <h1 className="text-2xl font-serif font-bold text-sidebar-foreground leading-none">TaskFlow</h1>
               </div>
               <Button
                 variant="ghost"
@@ -332,8 +315,8 @@ export function Sidebar({
                 variant="ghost"
                 className="w-full justify-start text-sidebar-foreground hover:bg-destructive hover:text-destructive-foreground"
                 onClick={() => {
-                  logout();
-                  setIsMobileMenuOpen(false);
+                  logout()
+                  setIsMobileMenuOpen(false)
                 }}
               >
                 <LogOut className="h-4 w-4 mr-3" />
