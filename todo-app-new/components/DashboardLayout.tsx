@@ -10,6 +10,7 @@ interface DashboardLayoutProps {
   onSectionChange: (section: string) => void
   onAddTask?: () => void
   onAddUser?: () => void
+  onAddDepartment?: () => void
   children: React.ReactNode
 }
 
@@ -19,6 +20,7 @@ export default function DashboardLayout({
   onSectionChange,
   onAddTask,
   onAddUser,
+  onAddDepartment,
   children,
 }: DashboardLayoutProps) {
   return (
@@ -30,6 +32,7 @@ export default function DashboardLayout({
         onSectionChange={onSectionChange}
         onAddTask={onAddTask}
         onAddUser={onAddUser}
+        onAddDepartment={onAddDepartment}
       />
 
       {/* 

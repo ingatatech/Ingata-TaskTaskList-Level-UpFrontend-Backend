@@ -1,3 +1,4 @@
+// app/departments/page.tsx
 "use client"
 
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react"
@@ -41,31 +42,20 @@ export interface DepartmentManagementRef {
   triggerAddDepartment: () => void
 }
 
-interface DepartmentManagementPageProps {
-  // These props will be controlled by the parent layout
-  isCreateDialogOpen: boolean
-  onCreateDialogStateChange: (isOpen: boolean) => void
-}
-
-const DepartmentManagementPage = ({
-  isCreateDialogOpen,
-  onCreateDialogStateChange,
-}: DepartmentManagementPageProps) => {
+const DepartmentsPage = forwardRef<DepartmentManagementRef>((_, ref) => {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
-  
   const [departments, setDepartments] = useState<Department[]>([])
   const [totalDepartmentsCount, setTotalDepartmentsCount] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
   const [error, setError] = useState<string | null>(null)
 
-  // Dialog states for Edit and View
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null)
 
-  // Form states
   const [newDeptName, setNewDeptName] = useState("")
   const [newDeptDescription, setNewDeptDescription] = useState("")
   const [newDeptStatus, setNewDeptStatus] = useState("active")
@@ -78,6 +68,11 @@ const DepartmentManagementPage = ({
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
 
+  // Expose ref method
+  useImperativeHandle(ref, () => ({
+    triggerAddDepartment: () => setIsCreateDialogOpen(true),
+  }))
+
   const fetchDepartments = async () => {
     setIsLoading(true)
     setError(null)
@@ -86,12 +81,9 @@ const DepartmentManagementPage = ({
         name: searchTerm || undefined,
         status: filterStatus === "all" ? undefined : filterStatus,
       })
-      
       setDepartments(response.data || [])
       setTotalDepartmentsCount(response.total || 0)
-      
     } catch (error) {
-      console.error("Failed to fetch departments:", error)
       setError(error instanceof Error ? error.message : "Failed to fetch departments")
       setDepartments([])
       setTotalDepartmentsCount(0)
@@ -116,54 +108,24 @@ const DepartmentManagementPage = ({
   }, [searchTerm, filterStatus])
 
   const handleCreateDepartment = async () => {
-    if (!newDeptName.trim()) {
-      toast({
-        title: "Error",
-        description: "Department name is required.",
-        variant: "destructive",
-      })
-      return
-    }
+    if (!newDeptName.trim()) return toast({ title: "Error", description: "Department name is required.", variant: "destructive" })
 
     try {
       setIsLoading(true)
-      await departmentApi.createDepartment(
-        newDeptName.trim(),
-        newDeptDescription.trim() || undefined,
-        newDeptStatus as "active" | "inactive"
-      )
-
+      await departmentApi.createDepartment(newDeptName.trim(), newDeptDescription.trim() || undefined, newDeptStatus as "active" | "inactive")
       setNewDeptName("")
       setNewDeptDescription("")
       setNewDeptStatus("active")
-      onCreateDialogStateChange(false); // Close dialog via parent state
-
-      toast({
-        title: "Department Created",
-        description: "Department has been successfully created.",
-      })
-
+      setIsCreateDialogOpen(false)
+      toast({ title: "Department Created", description: "Department has been successfully created." })
       fetchDepartments()
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create department",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to create department", variant: "destructive" })
+    } finally { setIsLoading(false) }
   }
 
   const handleUpdateDepartment = async () => {
-    if (!selectedDepartment || !editDeptName.trim()) {
-      toast({
-        title: "Error",
-        description: "Department name is required.",
-        variant: "destructive",
-      })
-      return
-    }
+    if (!selectedDepartment || !editDeptName.trim()) return toast({ title: "Error", description: "Department name is required.", variant: "destructive" })
 
     try {
       setIsLoading(true)
@@ -172,46 +134,23 @@ const DepartmentManagementPage = ({
         description: editDeptDescription.trim() || undefined,
         status: editDeptStatus as "active" | "inactive",
       })
-
       setIsEditDialogOpen(false)
-      toast({
-        title: "Department Updated",
-        description: "Department has been successfully updated.",
-      })
-
+      toast({ title: "Department Updated", description: "Department has been successfully updated." })
       fetchDepartments()
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update department",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to update department", variant: "destructive" })
+    } finally { setIsLoading(false) }
   }
 
   const handleDeleteDepartment = async (departmentId: string) => {
     try {
       setIsLoading(true)
       await departmentApi.deleteDepartment(departmentId)
-
-      toast({
-        title: "Department Deleted",
-        description: "Department has been successfully removed.",
-        variant: "destructive",
-      })
-
+      toast({ title: "Department Deleted", description: "Department has been successfully removed.", variant: "destructive" })
       fetchDepartments()
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete department",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to delete department", variant: "destructive" })
+    } finally { setIsLoading(false) }
   }
 
   const handleViewDepartment = (department: Department) => {
@@ -227,13 +166,7 @@ const DepartmentManagementPage = ({
     setIsEditDialogOpen(true)
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
 
   const totalPages = Math.ceil(totalDepartmentsCount / itemsPerPage)
 
@@ -246,7 +179,7 @@ const DepartmentManagementPage = ({
           label: "Add Department",
           icon: <Plus className="h-4 w-4 mr-2" />,
           trigger: (
-            <Dialog open={isCreateDialogOpen} onOpenChange={onCreateDialogStateChange}>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="font-medium">
                   <Plus className="h-4 w-4 mr-2" />
@@ -261,29 +194,16 @@ const DepartmentManagementPage = ({
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="dept-name">Department Name *</Label>
-                    <Input
-                      id="dept-name"
-                      placeholder="Enter department name"
-                      value={newDeptName}
-                      onChange={(e) => setNewDeptName(e.target.value)}
-                    />
+                    <Input id="dept-name" placeholder="Enter department name" value={newDeptName} onChange={(e) => setNewDeptName(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dept-description">Description</Label>
-                    <Textarea
-                      id="dept-description"
-                      placeholder="Enter department description (optional)"
-                      value={newDeptDescription}
-                      onChange={(e) => setNewDeptDescription(e.target.value)}
-                      rows={3}
-                    />
+                    <Textarea id="dept-description" placeholder="Enter department description (optional)" value={newDeptDescription} onChange={(e) => setNewDeptDescription(e.target.value)} rows={3} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dept-status">Status</Label>
                     <Select value={newDeptStatus} onValueChange={setNewDeptStatus}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="active">Active</SelectItem>
                         <SelectItem value="inactive">Inactive</SelectItem>
@@ -325,9 +245,7 @@ const DepartmentManagementPage = ({
             <div className="text-center">
               <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-2" />
               <p className="text-destructive mb-2">Failed to load departments</p>
-              <Button onClick={fetchDepartments} variant="outline" size="sm">
-                Try Again
-              </Button>
+              <Button onClick={fetchDepartments} variant="outline" size="sm">Try Again</Button>
             </div>
           </CardContent>
         </Card>
@@ -357,64 +275,37 @@ const DepartmentManagementPage = ({
             renderCell={(dept, column) => {
               switch (column.key) {
                 case "name":
-                  return (
-                    <div className="flex items-center space-x-2">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{dept.name}</span>
-                    </div>
-                  )
+                  return <div className="flex items-center space-x-2"><Building2 className="h-4 w-4 text-muted-foreground" /><span className="font-medium">{dept.name}</span></div>
                 case "description":
-                  return (
-                    <span className="text-sm text-muted-foreground">
-                      {dept.description || <em>No description</em>}
-                    </span>
-                  )
+                  return <span className="text-sm text-muted-foreground">{dept.description || <em>No description</em>}</span>
                 case "status":
                   return <StatusBadge status={dept.status} />
                 case "userCount":
-                  return (
-                    <div className="flex items-center space-x-1">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <span>{dept.userCount || 0}</span>
-                    </div>
-                  )
+                  return <div className="flex items-center space-x-1"><Users className="h-4 w-4 text-muted-foreground" /><span>{dept.userCount || 0}</span></div>
                 case "createdAt":
                   return <span className="text-sm">{formatDate(dept.createdAt)}</span>
                 case "actions":
                   return (
                     <div className="flex items-center justify-end space-x-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleViewDepartment(dept)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEditDepartment(dept)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleViewDepartment(dept)}><Eye className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEditDepartment(dept)}><Edit className="h-4 w-4" /></Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Delete Department</AlertDialogTitle>
                             <AlertDialogDescription>
                               Are you sure you want to delete "{dept.name}"? This action cannot be undone.
-                              {(dept.userCount && dept.userCount > 0) && (
-                                <span className="block mt-2 text-amber-600 font-medium">
-                                  Warning: This department has {dept.userCount} user(s) assigned to it.
-                                </span>
+                              {dept.userCount && dept.userCount > 0 && (
+                                <span className="block mt-2 text-amber-600 font-medium">Warning: This department has {dept.userCount} user(s) assigned.</span>
                               )}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteDepartment(dept.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete
-                            </AlertDialogAction>
+                            <AlertDialogAction onClick={() => handleDeleteDepartment(dept.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -428,13 +319,7 @@ const DepartmentManagementPage = ({
 
           {totalPages > 1 && (
             <div className="flex justify-center">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                itemsPerPage={itemsPerPage}
-                totalItems={totalDepartmentsCount}
-              />
+              <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} itemsPerPage={itemsPerPage} totalItems={totalDepartmentsCount} />
             </div>
           )}
         </>
@@ -459,23 +344,16 @@ const DepartmentManagementPage = ({
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Description</Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {selectedDepartment.description || "No description provided"}
-                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">{selectedDepartment.description || "No description provided"}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm font-medium">Status</Label>
-                    <div className="mt-1">
-                      <StatusBadge status={selectedDepartment.status} />
-                    </div>
+                    <div className="mt-1"><StatusBadge status={selectedDepartment.status} /></div>
                   </div>
                   <div>
                     <Label className="text-sm font-medium">Users</Label>
-                    <div className="flex items-center space-x-1 mt-1">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <p className="text-sm">{selectedDepartment.userCount || 0} user(s)</p>
-                    </div>
+                    <div className="flex items-center space-x-1 mt-1"><Users className="h-4 w-4 text-muted-foreground" /><p className="text-sm">{selectedDepartment.userCount || 0} user(s)</p></div>
                   </div>
                   <div>
                     <Label className="text-sm font-medium">Created</Label>
@@ -502,27 +380,16 @@ const DepartmentManagementPage = ({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-dept-name">Department Name *</Label>
-              <Input
-                id="edit-dept-name"
-                value={editDeptName}
-                onChange={(e) => setEditDeptName(e.target.value)}
-              />
+              <Input id="edit-dept-name" value={editDeptName} onChange={(e) => setEditDeptName(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-dept-description">Description</Label>
-              <Textarea
-                id="edit-dept-description"
-                value={editDeptDescription}
-                onChange={(e) => setEditDeptDescription(e.target.value)}
-                rows={3}
-              />
+              <Textarea id="edit-dept-description" value={editDeptDescription} onChange={(e) => setEditDeptDescription(e.target.value)} rows={3} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-dept-status">Status</Label>
               <Select value={editDeptStatus} onValueChange={setEditDeptStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="inactive">Inactive</SelectItem>
@@ -537,9 +404,6 @@ const DepartmentManagementPage = ({
       </Dialog>
     </div>
   )
-}
+})
 
-// NOTE: We no longer need the forwardRef or the useImperativeHandle
-// as the state is now managed by the parent component.
-// A page component should ideally not expose a ref to a parent.
-export default DepartmentManagementPage
+export default DepartmentsPage

@@ -1,4 +1,4 @@
-// routes/departmentRoutes.ts
+// routes/departmentRoutes.ts (FIXED WITH PROPER PAGINATION)
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../app';
 import { Department } from '../entities/Department';
@@ -11,14 +11,39 @@ interface AuthRequest extends Request {
 
 const router = Router();
 
-// GET ALL DEPARTMENTS (with optional pagination and filtering)
+// COUNT ALL DEPARTMENTS
+router.get('/departments/count', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const total = await AppDataSource.getRepository(Department).count();
+    res.status(200).json({ total });
+  } catch (error) {
+    console.error('Error counting departments:', error);
+    res.status(500).json({ message: 'Server error', error });
+  }
+});
+
+// COUNT ACTIVE DEPARTMENTS
+router.get('/departments/count/active', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const activeCount = await AppDataSource.getRepository(Department).count({ 
+      where: { status: 'active' } 
+    });
+    res.status(200).json({ total: activeCount });
+  } catch (error) {
+    console.error('Error counting active departments:', error);
+    res.status(500).json({ message: 'Server error', error });
+  }
+});
+
+// GET ALL DEPARTMENTS WITH PROPER PAGINATION (FIXED)
 router.get('/departments', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { page, limit, name, status } = req.query;
     const departmentRepository = AppDataSource.getRepository(Department);
 
-    // If pagination is requested
+    // FIXED: Always handle pagination consistently like user routes
     if (page && limit) {
+      // Paginated response for admin dashboard
       const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
       
       let whereCondition: any = {};
@@ -29,7 +54,7 @@ router.get('/departments', authMiddleware, async (req: AuthRequest, res: Respons
         where: whereCondition,
         skip,
         take: parseInt(limit as string),
-        order: { name: 'ASC' },
+        order: { createdAt: 'DESC' }, // Changed to match user pattern
         relations: ['users'] // Include user count
       });
 
@@ -44,7 +69,7 @@ router.get('/departments', authMiddleware, async (req: AuthRequest, res: Respons
         }))
       });
     } else {
-      // Simple list for dropdowns
+      // Simple list for dropdowns (no pagination needed)
       const departments = await departmentRepository.find({
         where: { status: 'active' },
         order: { name: 'ASC' },
