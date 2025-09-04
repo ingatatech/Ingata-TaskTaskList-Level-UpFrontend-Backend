@@ -1,10 +1,10 @@
+//components/sidebar.tsx
 "use client"
 
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/hooks/use-auth"
 import {
   Users,
@@ -20,6 +20,7 @@ import {
   Plus,
   UserPlus,
   Eye,
+  Building2, // 👈 icon for Department
 } from "lucide-react"
 
 interface SubItem {
@@ -42,6 +43,7 @@ interface SidebarProps {
   onSectionChange?: (section: string) => void
   onAddTask?: () => void
   onAddUser?: () => void
+  onAddDepartment?: () => void // 👈 department add handler
 }
 
 export function Sidebar({
@@ -50,6 +52,7 @@ export function Sidebar({
   onSectionChange,
   onAddTask,
   onAddUser,
+  onAddDepartment,
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -65,6 +68,7 @@ export function Sidebar({
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
+  // ⚡ Menu for Admin
   const adminMenuItems: MenuItem[] = [
     { id: "overview", label: "Overview", icon: BarChart3 },
     {
@@ -77,6 +81,15 @@ export function Sidebar({
       ],
     },
     {
+      id: "departments",
+      label: "Department Management",
+      icon: Building2,
+      subItems: [
+        { id: "departments-view", label: "View All Departments", icon: Eye },
+        { id: "departments-add", label: "Add Department", icon: Plus },
+      ],
+    },
+    {
       id: "tasks",
       label: "All Tasks",
       icon: ClipboardList,
@@ -86,6 +99,7 @@ export function Sidebar({
     { id: "settings", label: "Settings", icon: Settings },
   ]
 
+  // ⚡ Menu for Normal User
   const userMenuItems: MenuItem[] = [
     {
       id: "tasks",
@@ -102,15 +116,21 @@ export function Sidebar({
 
   const menuItems = userRole === "admin" ? adminMenuItems : userMenuItems
 
+  // Handlers
   const handleAddTask = () => onAddTask?.()
   const handleAddUser = () => onAddUser?.()
+  const handleAddDepartment = () => onAddDepartment?.()
 
   const toggleExpanded = (itemId: string) => {
     setExpandedItem(expandedItem === itemId ? null : itemId)
   }
 
   const handleSubItemClick = (subItemId: string, parentId: string) => {
-    if (subItemId === "users-view" || subItemId === "tasks-view") {
+    if (
+      subItemId === "users-view" ||
+      subItemId === "tasks-view" ||
+      subItemId === "departments-view"
+    ) {
       setActiveSection(parentId)
       onSectionChange?.(parentId)
     } else if (subItemId === "users-add") {
@@ -121,10 +141,15 @@ export function Sidebar({
       setActiveSection("tasks")
       onSectionChange?.("tasks")
       setTimeout(handleAddTask, 100)
+    } else if (subItemId === "departments-add") {
+      setActiveSection("departments")
+      onSectionChange?.("departments")
+      setTimeout(handleAddDepartment, 100)
     }
     setIsMobileMenuOpen(false)
   }
 
+  // Render Menu Items
   const renderMenuItem = (item: MenuItem, isMobile = false) => {
     const Icon = item.icon
     const isActive = activeSection === item.id
@@ -138,10 +163,13 @@ export function Sidebar({
           variant={isActive ? "default" : "ghost"}
           className={cn(
             "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent",
-            isActive && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+            isActive &&
+              "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
             "px-2",
           )}
-          onClick={() => (hasSubItems ? toggleExpanded(item.id) : handleSubItemClick(item.id, item.id))}
+          onClick={() =>
+            hasSubItems ? toggleExpanded(item.id) : handleSubItemClick(item.id, item.id)
+          }
         >
           <Icon className="h-4 w-4" />
         </Button>
@@ -155,7 +183,8 @@ export function Sidebar({
             variant={isActive ? "default" : "ghost"}
             className={cn(
               "w-full justify-between text-sidebar-foreground hover:bg-sidebar-accent group",
-              isActive && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+              isActive &&
+                "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
             )}
             onClick={() => toggleExpanded(item.id)}
           >
@@ -164,7 +193,10 @@ export function Sidebar({
               <span className="font-medium">{item.label}</span>
             </div>
             <ChevronRight
-              className={cn("h-4 w-4 transition-transform duration-200", isExpanded && "rotate-90")}
+              className={cn(
+                "h-4 w-4 transition-transform duration-200",
+                isExpanded && "rotate-90",
+              )}
             />
           </Button>
 
@@ -199,7 +231,8 @@ export function Sidebar({
         variant={isActive ? "default" : "ghost"}
         className={cn(
           "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent",
-          isActive && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+          isActive &&
+            "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
         )}
         onClick={() => handleSubItemClick(item.id, item.id)}
       >
@@ -211,30 +244,33 @@ export function Sidebar({
 
   return (
     <>
-      {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between px-4 h-20 border-b bg-sidebar/50 backdrop-blur-sm fixed top-0 left-0 right-0 z-40">
-        <div className="flex items-center space-x-3">
-          <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-            <CheckCircle2 className="h-5 w-5 text-sidebar-primary-foreground" />
-          </div>
-          <h1 className="text-2xl font-serif font-bold text-sidebar-foreground leading-none">TaskFlow</h1>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="text-sidebar-foreground"
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-      </div>
+      
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-start px-4 h-20 border-b bg-sidebar/50 backdrop-blur-sm fixed top-0 left-0 right-0 z-40 space-x-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="text-sidebar-foreground"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+        <div className="flex items-center space-x-3">
+          <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
+            <CheckCircle2 className="h-5 w-5 text-sidebar-primary-foreground" />
+          </div>
+          <h1 className="text-2xl font-serif font-bold text-sidebar-foreground leading-none">
+            TaskFlow
+          </h1>
+        </div>
+      </div>
 
       {/* Desktop Sidebar */}
       <div
         className={cn(
           "hidden md:flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300",
           isCollapsed ? "w-16" : "w-64",
-          "h-screen fixed top-0 left-0 z-30"
+          "h-screen fixed top-0 left-0 z-30",
         )}
       >
         {/* Sidebar Header */}
@@ -244,7 +280,9 @@ export function Sidebar({
               <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
                 <CheckCircle2 className="h-5 w-5 text-sidebar-primary-foreground" />
               </div>
-              <h1 className="text-2xl font-serif font-bold text-sidebar-foreground leading-none">TaskFlow</h1>
+              <h1 className="text-2xl font-serif font-bold text-sidebar-foreground leading-none">
+                TaskFlow
+              </h1>
             </div>
           )}
           <Button
@@ -292,7 +330,9 @@ export function Sidebar({
                 <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
                   <CheckCircle2 className="h-5 w-5 text-sidebar-primary-foreground" />
                 </div>
-                <h1 className="text-2xl font-serif font-bold text-sidebar-foreground leading-none">TaskFlow</h1>
+                <h1 className="text-2xl font-serif font-bold text-sidebar-foreground leading-none">
+                  TaskFlow
+                </h1>
               </div>
               <Button
                 variant="ghost"

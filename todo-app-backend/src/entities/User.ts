@@ -1,6 +1,7 @@
 // entities/User.ts
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Task } from './Task';
+import { Department } from './Department';
 
 @Entity()
 export class User {
@@ -27,13 +28,10 @@ export class User {
   })
   status!: "active" | "inactive";
 
-  // NEW: Department field
-  @Column({
-    type: "enum",
-    enum: ["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"],
-    nullable: true
-  })
-  department!: "IT" | "HR" | "Finance" | "Marketing" | "Operations" | "Sales" | "Support" | null;
+  // UPDATED: Changed to ManyToOne relationship with Department
+  @ManyToOne(() => Department, (department) => department.users, { nullable: true })
+  @JoinColumn({ name: "departmentId" })
+  department!: Department | null;
 
   @Column({ type: 'varchar', nullable: true })
   otp!: string | null;

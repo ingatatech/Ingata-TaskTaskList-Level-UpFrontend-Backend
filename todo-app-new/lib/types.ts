@@ -1,24 +1,37 @@
-//lib/types.ts
-export type Department = "IT" | "HR" | "Finance" | "Marketing" | "Operations" | "Sales" | "Support"
+// lib/types.ts (FIXED)
+
+// UPDATED: Department interface to match backend entity
+export interface Department {
+  id: string
+  name: string
+  description?: string | null
+  status: "active" | "inactive"
+  userCount?: number
+  users?: User[]
+  createdAt: string
+  updatedAt: string
+}
 
 export interface Task {
-  id: number
+  id: number | string
   title: string
   description: string
   status: "pending" | "completed"
   priority?: "low" | "medium" | "high"
   dueDate?: string
   createdAt?: string
-  userId?: number
-  user?: User // NEW: Include user info in tasks
+  updatedAt?: string
+  userId?: number | string
+  user?: User
 }
 
+// UPDATED: User interface with proper department relationship
 export interface User {
   id: string | number
   email: string
   role: "admin" | "user"
   status: "active" | "inactive"
-  department?: Department | null // NEW: Department field
+  department?: Department | null // Now references Department object
   name?: string | null
   tasks?: number
   createdAt?: string
@@ -33,26 +46,47 @@ export interface ApiResponse<T> {
   limit?: number
 }
 
-// NEW: Filter interfaces
+// UPDATED: Filter interfaces
 export interface UserFilters {
   email?: string
   role?: "admin" | "user"
   status?: "active" | "inactive"
-  department?: Department
+  departmentId?: string // Changed from department to departmentId
 }
 
 export interface TaskFilters {
   status?: "pending" | "completed"
   title?: string
-  department?: Department
+  departmentId?: string // Changed from department to departmentId
   userEmail?: string
 }
 
-// NEW: Department statistics interface
+// UPDATED: Department statistics interface
 export interface DepartmentStats {
-  department: Department
+  id: string
+  name: string
+  status: "active" | "inactive"
   userCount: number
-  totalTasks: number
-  pendingTasks: number
-  completedTasks: number
+  activeUsers: number
+  totalTasks?: number
+  pendingTasks?: number
+  completedTasks?: number
+}
+
+// NEW: Department management interfaces
+export interface DepartmentFilters {
+  name?: string
+  status?: "active" | "inactive"
+}
+
+export interface CreateDepartmentData {
+  name: string
+  description?: string
+  status?: "active" | "inactive"
+}
+
+export interface UpdateDepartmentData {
+  name?: string
+  description?: string
+  status?: "active" | "inactive"
 }

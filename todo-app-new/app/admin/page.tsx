@@ -1,4 +1,4 @@
-// app/admin/page.tsx
+//admin/page.tsx
 "use client"
 
 import { useState, useRef } from "react"
@@ -9,16 +9,25 @@ import UserManagementPage from "./users/page"
 import TaskManagementPage from "./tasks/page"
 import ProfilePage from "./profile/page"
 import SettingsPage from "./settings/page"
+import DepartmentsPage from "./departments/page"   // ✅ Import DepartmentsPage
 
 interface UserManagementRef {
   triggerAddUser: () => void
 }
 
+interface DepartmentManagementRef {
+  triggerAddDepartment: () => void
+}
+
 export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("overview")
+
   const userManagementRef = useRef<UserManagementRef>(null)
+  const departmentManagementRef = useRef<DepartmentManagementRef>(null)
 
   const handleAddUser = () => userManagementRef.current?.triggerAddUser()
+  const handleAddDepartment = () =>
+    departmentManagementRef.current?.triggerAddDepartment()
 
   const renderContent = () => {
     switch (activeSection) {
@@ -26,6 +35,8 @@ export default function AdminDashboard() {
         return <OverviewPage />
       case "users":
         return <UserManagementPage ref={userManagementRef} />
+      case "departments": // ✅ Add departments case
+        return <DepartmentsPage ref={departmentManagementRef} />
       case "tasks":
         return <TaskManagementPage />
       case "profile":
@@ -44,6 +55,7 @@ export default function AdminDashboard() {
         activeSection={activeSection}
         onSectionChange={setActiveSection}
         onAddUser={handleAddUser}
+        onAddDepartment={handleAddDepartment} // ✅ Added support for Add Department button
       >
         {renderContent()}
       </DashboardLayout>

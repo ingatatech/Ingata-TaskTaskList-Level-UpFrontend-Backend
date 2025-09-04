@@ -1,3 +1,4 @@
+////app/adim/page.tsx 
 "use client"
 
 import type React from "react"

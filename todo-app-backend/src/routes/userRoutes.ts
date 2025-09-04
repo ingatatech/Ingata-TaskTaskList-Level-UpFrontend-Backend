@@ -1,7 +1,8 @@
-// routes/userRoutes.ts
+// routes/userRoutes.ts (UPDATED)
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../app';
 import { User } from '../entities/User';
+import { Department } from '../entities/Department';
 import { authMiddleware, adminMiddleware } from '../middlewares/authMiddleware';
 import { ILike } from 'typeorm';
 import crypto from 'crypto';
@@ -43,35 +44,28 @@ router.get('/admin/exists', async (req: Request, res: Response) => {
   }
 });
 
-// NEW: GET AVAILABLE DEPARTMENTS
-router.get('/departments', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const departments = ["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"];
-    res.status(200).json({ departments });
-  } catch (error) {
-    console.error('Error fetching departments:', error);
-    res.status(500).json({ message: 'Server error', error });
-  }
-});
-
-// UPDATED: CREATE USER WITH DEPARTMENT
+// UPDATED: CREATE USER WITH DEPARTMENT RELATIONSHIP
 router.post('/users/create', async (req: Request, res: Response) => {
   try {
-    const { email, role, department } = req.body;
+    const { email, role, departmentId } = req.body;
     const userRepository = AppDataSource.getRepository(User);
-
-    // Validate department if provided
-    const validDepartments = ["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"];
-    if (department && !validDepartments.includes(department)) {
-      return res.status(400).json({ 
-        message: 'Invalid department. Valid departments are: ' + validDepartments.join(', ') 
-      });
-    }
+    const departmentRepository = AppDataSource.getRepository(Department);
 
     // Check if user already exists
     const existingUser = await userRepository.findOne({ where: { email } });
     if (existingUser) {
       return res.status(409).json({ message: 'User with this email already exists.' });
+    }
+
+    // Validate department if provided
+    let department = null;
+    if (departmentId) {
+      department = await departmentRepository.findOne({ 
+        where: { id: departmentId, status: 'active' } 
+      });
+      if (!department) {
+        return res.status(400).json({ message: 'Invalid or inactive department selected.' });
+      }
     }
 
     // Check if admin already exists
@@ -100,11 +94,11 @@ router.post('/users/create', async (req: Request, res: Response) => {
     const tempPassword = crypto.randomBytes(8).toString('hex');
     const hashedTempPassword = await hashPassword(tempPassword);
 
-    // Create user with department
+    // Create user with department relationship
     const user = userRepository.create({
       email,
       role: finalRole,
-      department: department || null, // Include department
+      department: department, // Set the department relationship
       password: hashedTempPassword,
       isFirstLogin: true,
       otp: null,
@@ -127,7 +121,7 @@ router.post('/users/create', async (req: Request, res: Response) => {
             <li><strong>Email:</strong> ${email}</li>
             <li><strong>Temporary Password:</strong> ${tempPassword}</li>
             <li><strong>Role:</strong> ${finalRole}</li>
-            ${department ? `<li><strong>Department:</strong> ${department}</li>` : ''}
+            ${department ? `<li><strong>Department:</strong> ${department.name}</li>` : ''}
           </ul>
           <p><em>Note: You will be required to set a new password after your first login.</em></p>
           <p>Please login at: <a href="${process.env.FRONTEND_URL}/auth/login">${process.env.FRONTEND_URL}/auth/login</a></p>
@@ -146,7 +140,7 @@ router.post('/users/create', async (req: Request, res: Response) => {
       user: { 
         email: user.email, 
         role: user.role,
-        department: user.department,
+        department: department ? { id: department.id, name: department.name } : null,
         assignedRole: finalRole,
         adminExists: !!adminExists
       }
@@ -179,23 +173,24 @@ router.get('/users/count/active', authMiddleware, adminMiddleware, async (req: A
   }
 });
 
-// UPDATED: GET PAGINATED USERS WITH DEPARTMENT FILTERING
+// UPDATED: GET PAGINATED USERS WITH DEPARTMENT INFO
 router.get('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { page = 1, limit = 5, email, role, status, department } = req.query;
+    const { page = 1, limit = 5, email, role, status, departmentId } = req.query;
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
 
     let whereCondition: any = {};
     if (email) whereCondition.email = ILike(`%${email}%`);
     if (role) whereCondition.role = role;
     if (status) whereCondition.status = status;
-    if (department) whereCondition.department = department; // NEW: Department filtering
+    if (departmentId) whereCondition.department = { id: departmentId }; // Filter by department
 
     const [users, total] = await AppDataSource.getRepository(User).findAndCount({
       where: whereCondition,
       skip,
       take: parseInt(limit as string),
       order: { createdAt: 'DESC' },
+      relations: ['department'] // Include department info
     });
 
     res.status(200).json({
@@ -213,7 +208,10 @@ router.get('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, r
 // GET SINGLE USER
 router.get('/users/:id', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await AppDataSource.getRepository(User).findOne({ where: { id: req.params.id } });
+    const user = await AppDataSource.getRepository(User).findOne({ 
+      where: { id: req.params.id },
+      relations: ['department'] // Include department info
+    });
     if (!user) return res.status(404).json({ message: 'User not found.' });
     res.status(200).json(user);
   } catch (error) {
@@ -222,29 +220,48 @@ router.get('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReques
   }
 });
 
-// UPDATED: UPDATE USER WITH DEPARTMENT
+// UPDATED: UPDATE USER WITH DEPARTMENT RELATIONSHIP
 router.put('/users/:id', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { email, role, status, department } = req.body;
+    const { email, role, status, departmentId } = req.body;
     const userRepository = AppDataSource.getRepository(User);
-    const userToUpdate = await userRepository.findOne({ where: { id: req.params.id } });
+    const departmentRepository = AppDataSource.getRepository(Department);
+    
+    const userToUpdate = await userRepository.findOne({ 
+      where: { id: req.params.id },
+      relations: ['department']
+    });
+    
     if (!userToUpdate) return res.status(404).json({ message: 'User not found.' });
 
     // Validate department if provided
-    const validDepartments = ["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"];
-    if (department && !validDepartments.includes(department)) {
-      return res.status(400).json({ 
-        message: 'Invalid department. Valid departments are: ' + validDepartments.join(', ') 
+    let department = null;
+    if (departmentId) {
+      department = await departmentRepository.findOne({ 
+        where: { id: departmentId, status: 'active' } 
       });
+      if (!department) {
+        return res.status(400).json({ message: 'Invalid or inactive department selected.' });
+      }
     }
 
     userToUpdate.email = email ?? userToUpdate.email;
     userToUpdate.role = role ?? userToUpdate.role;
     userToUpdate.status = status ?? userToUpdate.status;
-    userToUpdate.department = department ?? userToUpdate.department; // NEW: Update department
+    userToUpdate.department = departmentId ? department : (departmentId === null ? null : userToUpdate.department);
 
     await userRepository.save(userToUpdate);
-    res.status(200).json({ message: 'User updated successfully.', user: userToUpdate });
+    
+    // Fetch updated user with department info
+    const updatedUser = await userRepository.findOne({
+      where: { id: req.params.id },
+      relations: ['department']
+    });
+    
+    res.status(200).json({ 
+      message: 'User updated successfully.', 
+      user: updatedUser 
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error', error });

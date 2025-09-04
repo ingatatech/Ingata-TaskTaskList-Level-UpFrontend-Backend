@@ -16,7 +16,7 @@ const router = Router();
 // UPDATED: Admin get all tasks with department filtering support
 router.get('/tasks/all', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { page = 1, limit = 10, status, title, department, userEmail } = req.query;
+    const { page = 1, limit = 10, status, title, departmentId, userEmail } = req.query;
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
 
     let whereCondition: any = {};
@@ -31,13 +31,15 @@ router.get('/tasks/all', authMiddleware, adminMiddleware, async (req: AuthReques
       whereCondition.title = ILike(`%${title}%`);
     }
 
-    // NEW: Filter by user's department
-    if (department) {
-      whereCondition.user = { department };
+    // NEW: Filter by user's department using the departmentId
+    if (departmentId) {
+      // We need to create a nested where condition to filter by the user's department.
+      whereCondition.user = { department: { id: departmentId } };
     }
 
     // NEW: Filter by user's email
     if (userEmail) {
+      // Check if a user condition already exists from the department filter
       if (whereCondition.user) {
         whereCondition.user.email = ILike(`%${userEmail}%`);
       } else {
@@ -48,7 +50,8 @@ router.get('/tasks/all', authMiddleware, adminMiddleware, async (req: AuthReques
     const taskRepository = AppDataSource.getRepository(Task);
     const [tasks, total] = await taskRepository.findAndCount({
       where: whereCondition,
-      relations: ['user'], // This joins the user information (including department) with each task
+      // FIXED: Use nested relations to load both the user and their department
+      relations: ['user', 'user.department'],
       skip,
       take: parseInt(limit as string),
       order: { createdAt: 'DESC' },
@@ -87,7 +90,8 @@ router.get('/tasks/user/:userId', authMiddleware, adminMiddleware, async (req: A
     const taskRepository = AppDataSource.getRepository(Task);
     const [tasks, total] = await taskRepository.findAndCount({
       where: whereCondition,
-      relations: ['user'], // This will include department info
+      // FIXED: Use nested relations to load both the user and their department
+      relations: ['user', 'user.department'],
       skip,
       take: parseInt(limit as string),
       order: { createdAt: 'DESC' },
@@ -120,15 +124,16 @@ router.get('/tasks/stats/department', authMiddleware, adminMiddleware, async (re
     const departmentStats = await userRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.tasks', 'task')
+      .leftJoinAndSelect('user.department', 'department') // NEW: Explicitly join the department
       .select([
-        'user.department as department',
+        'department.name as departmentName', // Select the department name
         'COUNT(DISTINCT user.id) as userCount',
         'COUNT(task.id) as totalTasks',
         'COUNT(CASE WHEN task.status = \'pending\' THEN 1 END) as pendingTasks',
         'COUNT(CASE WHEN task.status = \'completed\' THEN 1 END) as completedTasks'
       ])
       .where('user.department IS NOT NULL')
-      .groupBy('user.department')
+      .groupBy('department.name')
       .getRawMany();
 
     res.status(200).json({ departmentStats });

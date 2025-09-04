@@ -1,4 +1,3 @@
-// admin/tasks/page.tsx
 "use client"
 
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react"
@@ -23,7 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { ClipboardList, Eye, AlertTriangle, Plus, Building2, User, Calendar } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { adminTaskAPI, userAPI, Department } from "@/lib/api"
+import { adminTaskAPI, departmentApi, Department } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 
 interface Task {
@@ -50,8 +49,8 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
   const [taskSearchTerm, setTaskSearchTerm] = useState("")
   const [taskStatusFilter, setTaskStatusFilter] = useState("all")
   const [taskPriorityFilter, setTaskPriorityFilter] = useState("all")
-  const [taskDepartmentFilter, setTaskDepartmentFilter] = useState("all") // NEW: Department filter
-  const [taskUserEmailFilter, setTaskUserEmailFilter] = useState("") // NEW: User email filter
+  const [taskDepartmentFilter, setTaskDepartmentFilter] = useState("all")
+  const [taskUserEmailFilter, setTaskUserEmailFilter] = useState("")
 
   const [viewTaskDialog, setViewTaskDialog] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
@@ -70,7 +69,7 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
   const [tasksPerPage] = useState(5)
   const [tasksError, setTasksError] = useState<string | null>(null)
 
-  // NEW: Department state
+  // FIXED: Department state with proper typing
   const [departments, setDepartments] = useState<Department[]>([])
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(false)
 
@@ -81,21 +80,25 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
   // Expose the triggerAddTask method to parent components
   useImperativeHandle(ref, () => ({
     triggerAddTask: () => {
-      console.log("triggerAddTask called in TaskManagementPage") // Debug log
+      console.log("triggerAddTask called in TaskManagementPage")
       setIsCreateTaskDialogOpen(true)
     }
   }))
 
-  // NEW: Fetch departments
+  // FIXED: Fetch departments using proper API
   const fetchDepartments = async () => {
     setIsLoadingDepartments(true)
     try {
-      const response = await userAPI.getDepartments()
+      const response = await departmentApi.getDepartments()
       setDepartments(response.departments)
     } catch (error) {
       console.error("Failed to fetch departments:", error)
-      // Fallback departments if API fails
-      setDepartments(["IT", "HR", "Finance", "Marketing", "Operations", "Sales", "Support"])
+      toast({
+        title: "Warning",
+        description: "Failed to load departments. Please refresh the page.",
+        variant: "destructive",
+      })
+      setDepartments([])
     } finally {
       setIsLoadingDepartments(false)
     }
@@ -108,8 +111,8 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
       const filters = {
         title: taskSearchTerm || undefined,
         status: taskStatusFilter === "all" ? undefined : taskStatusFilter,
-        department: taskDepartmentFilter === "all" ? undefined : (taskDepartmentFilter as Department), // NEW: Department filter
-        userEmail: taskUserEmailFilter || undefined, // NEW: User email filter
+        departmentId: taskDepartmentFilter === "all" ? undefined : (taskDepartmentFilter === "null" ? "null" : taskDepartmentFilter),
+        userEmail: taskUserEmailFilter || undefined,
       };
 
       const response = await adminTaskAPI.getAllTasks(tasksCurrentPage, tasksPerPage, filters)
@@ -136,7 +139,6 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
     }
   }
 
-  // NEW: Fetch departments on mount
   useEffect(() => {
     fetchDepartments()
   }, [])
@@ -145,11 +147,11 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
     if (user?.role === "admin") {
       fetchAllTasks()
     }
-  }, [user, tasksCurrentPage, taskSearchTerm, taskStatusFilter, taskDepartmentFilter, taskUserEmailFilter]) // UPDATED: Added new filters
+  }, [user, tasksCurrentPage, taskSearchTerm, taskStatusFilter, taskDepartmentFilter, taskUserEmailFilter])
 
   useEffect(() => {
     setTasksCurrentPage(1)
-  }, [taskSearchTerm, taskStatusFilter, taskDepartmentFilter, taskUserEmailFilter]) // UPDATED: Added new filters
+  }, [taskSearchTerm, taskStatusFilter, taskDepartmentFilter, taskUserEmailFilter])
 
   const handleAddTask = async () => {
     if (!newTaskTitle || !newTaskPriority || !newTaskAssignedUser) {
@@ -202,7 +204,7 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
     setViewTaskDialog(true)
   }
 
-  // NEW: Format date helper
+  // Format date helper
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -300,36 +302,47 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
         }}
       />
 
-      {/* UPDATED: Search filters with department and user email */}
-      <SearchFilters
-        searchValue={taskSearchTerm}
-        onSearchChange={setTaskSearchTerm}
-        searchPlaceholder="Search tasks..."
-        filters={[
-          {
-            value: taskStatusFilter,
-            onValueChange: setTaskStatusFilter,
-            placeholder: "Filter by status",
-            options: [
-              { value: "all", label: "All Tasks" },
-              { value: "pending", label: "Pending" },
-              { value: "completed", label: "Completed" },
-            ],
-          },
-          // NEW: Department filter
-          {
-            value: taskDepartmentFilter,
-            onValueChange: setTaskDepartmentFilter,
-            placeholder: "Filter by department",
-            options: [
-              { value: "all", label: "All Departments" },
-              ...departments.map(dept => ({ value: dept, label: dept })),
-              { value: "null", label: "No Department" },
-            ],
-          },
-        ]}
-        
-      />
+      {/* FIXED: Search filters with department and user email - removed additionalFilters */}
+      <div className="space-y-4">
+        <SearchFilters
+          searchValue={taskSearchTerm}
+          onSearchChange={setTaskSearchTerm}
+          searchPlaceholder="Search tasks..."
+          filters={[
+            {
+              value: taskStatusFilter,
+              onValueChange: setTaskStatusFilter,
+              placeholder: "Filter by status",
+              options: [
+                { value: "all", label: "All Tasks" },
+                { value: "pending", label: "Pending" },
+                { value: "completed", label: "Completed" },
+              ],
+            },
+            // FIXED: Department filter with proper department objects
+            {
+              value: taskDepartmentFilter,
+              onValueChange: setTaskDepartmentFilter,
+              placeholder: "Filter by department",
+              options: [
+                { value: "all", label: "All Departments" },
+                ...departments.map(dept => ({ value: dept.id, label: dept.name })),
+                { value: "null", label: "No Department" },
+              ],
+            },
+          ]}
+        />
+        {/* User email filter moved outside as separate input */}
+        <div className="flex gap-2">
+          <div className="flex-1 max-w-sm">
+            <Input
+              placeholder="Filter by user email..."
+              value={taskUserEmailFilter}
+              onChange={(e) => setTaskUserEmailFilter(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
       {tasksError ? (
         <Card>
@@ -371,7 +384,7 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
             columns={[
               { key: "title", label: "Task" },
               { key: "user", label: "User" },
-              { key: "department", label: "Department" }, // NEW: Department column
+              { key: "department", label: "Department" },
               { key: "status", label: "Status" },
               { key: "createdAt", label: "Created" },
               { key: "actions", label: "Actions", className: "text-right" },
@@ -395,14 +408,13 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
                       </div>
                     </div>
                   );
-                // NEW: Department display
                 case "department":
                   return (
                     <div className="flex items-center space-x-1">
                       <Building2 className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm">
-                        {typeof task?.user === 'object' && task?.user?.department 
-                          ? task.user.department 
+                        {typeof task?.user === 'object' && task?.user?.department?.name 
+                          ? task.user.department.name 
                           : <span className="text-muted-foreground italic">No department</span>
                         }
                       </span>
@@ -445,7 +457,7 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
         </>
       )}
 
-      {/* UPDATED: View Task Dialog with Department Info */}
+      {/* FIXED: View Task Dialog with proper Department Info */}
       <Dialog open={viewTaskDialog} onOpenChange={setViewTaskDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -509,14 +521,14 @@ const TaskManagementPage = forwardRef<TaskManagementRef>((props, ref) => {
                         <p className="text-sm capitalize mt-1">{selectedTask.user.role}</p>
                       </div>
                     )}
-                    {/* NEW: Department display in task view */}
+                    {/* FIXED: Department display in task view */}
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Department</Label>
                       <div className="flex items-center space-x-1 mt-1">
                         <Building2 className="h-4 w-4 text-muted-foreground" />
                         <p className="text-sm">
-                          {typeof selectedTask.user === 'object' && selectedTask.user?.department
-                            ? selectedTask.user.department 
+                          {typeof selectedTask.user === 'object' && selectedTask.user?.department?.name
+                            ? selectedTask.user.department.name 
                             : <span className="text-muted-foreground italic">No department</span>
                           }
                         </p>

@@ -1,15 +1,28 @@
-//lib/api.ts
+// lib/api.ts (FIXED)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
 
-// UPDATED: Types with department support
+// UPDATED: Department interface to match backend
+export interface Department {
+  id: string
+  name: string
+  description?: string | null
+  status: "active" | "inactive"
+  userCount?: number
+  createdAt: string
+  updatedAt: string
+}
+
+// UPDATED: User interface with proper department relationship
 export interface User {
   id: string
   email: string
   role: "admin" | "user"
   status: "active" | "inactive"
-  department?: "IT" | "HR" | "Finance" | "Marketing" | "Operations" | "Sales" | "Support" | null
+  department?: Department | null // Now references Department object, not string
   createdAt: string
   updatedAt: string
+  name?: string | null
+  tasks?: number
 }
 
 export interface Task {
@@ -17,9 +30,11 @@ export interface Task {
   title: string
   description: string
   status: "pending" | "completed"
+  priority?: "low" | "medium" | "high"
   user?: User
   createdAt: string
   updatedAt: string
+  dueDate?: string | null
 }
 
 export interface ApiResponse<T> {
@@ -29,8 +44,6 @@ export interface ApiResponse<T> {
   page?: number
   limit?: number
 }
-
-export type Department = "IT" | "HR" | "Finance" | "Marketing" | "Operations" | "Sales" | "Support"
 
 // Helper function to get auth headers
 const getAuthHeaders = () => {
@@ -132,9 +145,9 @@ export const authApi = {
   },
 }
 
-// UPDATED: User API with department support
-export const userApi = {
-  // NEW: Get available departments
+// DEPARTMENT API
+export const departmentApi = {
+  // Get all departments (for dropdowns)
   getDepartments: async () => {
     const response = await fetch(`${API_BASE_URL}/admin/departments`, {
       headers: getAuthHeaders(),
@@ -148,12 +161,96 @@ export const userApi = {
     return response.json() as Promise<{ departments: Department[] }>
   },
 
-  // UPDATED: Create user with department
-  createUser: async (email: string, role: "admin" | "user" = "user", department?: Department) => {
+  // Get departments with pagination (for admin management)
+  getDepartmentsPaginated: async (page = 1, limit = 10, filters: { name?: string; status?: string } = {}) => {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v)),
+    })
+
+    const response = await fetch(`${API_BASE_URL}/admin/departments?${params}`, {
+      headers: getAuthHeaders(),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to fetch departments")
+    }
+
+    return response.json() as Promise<ApiResponse<Department[]>>
+  },
+
+  // Create department
+  createDepartment: async (name: string, description?: string, status: "active" | "inactive" = "active") => {
+    const response = await fetch(`${API_BASE_URL}/admin/departments`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name, description, status }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to create department")
+    }
+
+    return response.json()
+  },
+
+  // Update department
+  updateDepartment: async (id: string, data: Partial<Pick<Department, "name" | "description" | "status">>) => {
+    const response = await fetch(`${API_BASE_URL}/admin/departments/${id}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to update department")
+    }
+
+    return response.json()
+  },
+
+  // Delete department
+  deleteDepartment: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/admin/departments/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to delete department")
+    }
+
+    return response.json()
+  },
+
+  // Get department statistics
+  getDepartmentStats: async () => {
+    const response = await fetch(`${API_BASE_URL}/admin/departments/stats/overview`, {
+      headers: getAuthHeaders(),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message || "Failed to fetch department statistics")
+    }
+
+    return response.json()
+  },
+}
+
+// UPDATED: User API with proper department support
+export const userApi = {
+  // UPDATED: Create user with departmentId
+  createUser: async (email: string, role: "admin" | "user" = "user", departmentId?: string) => {
     const response = await fetch(`${API_BASE_URL}/admin/users/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, role, department }),
+      body: JSON.stringify({ email, role, departmentId }),
     })
 
     if (!response.ok) {
@@ -169,7 +266,7 @@ export const userApi = {
     email?: string; 
     role?: string; 
     status?: string; 
-    department?: Department 
+    departmentId?: string 
   } = {}) => {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -202,8 +299,8 @@ export const userApi = {
     return response.json() as Promise<User>
   },
 
-  // UPDATED: Update user with department
-  updateUser: async (id: string, data: Partial<Pick<User, "email" | "role" | "status" | "department">>) => {
+  // UPDATED: Update user with departmentId
+  updateUser: async (id: string, data: Partial<Pick<User, "email" | "role" | "status"> & { departmentId?: string | null }>) => {
     const response = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
       method: "PUT",
       headers: getAuthHeaders(),
@@ -317,7 +414,7 @@ export const adminTaskApi = {
   getAllTasks: async (page = 1, limit = 5, filters: { 
     status?: string; 
     title?: string; 
-    department?: Department;
+    departmentId?: string;
     userEmail?: string;
   } = {}) => {
     const params = new URLSearchParams({
@@ -356,22 +453,9 @@ export const adminTaskApi = {
 
     return response.json() as Promise<ApiResponse<Task[]>>
   },
-
-  // NEW: Get department statistics
-  getDepartmentStats: async () => {
-    const response = await fetch(`${API_BASE_URL}/admin/tasks/stats/department`, {
-      headers: getAuthHeaders(),
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || "Failed to fetch department statistics")
-    }
-
-    return response.json()
-  },
 }
 
+// Export everything
 export const userAPI = userApi
 export const taskAPI = taskApi
 export const adminTaskAPI = adminTaskApi

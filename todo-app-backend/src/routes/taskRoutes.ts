@@ -1,9 +1,8 @@
-//(routes/taskRoutes.ts)
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../app';
 import { Task } from '../entities/Task';
 import { User } from '../entities/User';
-import { authMiddleware } from '../middlewares/authMiddleware';
+import { authMiddleware, adminMiddleware } from '../middlewares/authMiddleware';
 import { ILike } from 'typeorm';
 
 // Extend the Express Request type to include the user property
@@ -12,6 +11,65 @@ interface AuthRequest extends Request {
 }
 
 const router = Router();
+
+// =================================================================
+// ADMIN ROUTES
+// =================================================================
+
+// Get all tasks for an admin, with filtering and pagination
+router.get('/tasks/all', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { page, limit, title, status, departmentId, userEmail } = req.query;
+    const taskRepository = AppDataSource.getRepository(Task);
+
+    const queryBuilder = taskRepository.createQueryBuilder('task')
+      .leftJoinAndSelect('task.user', 'user')
+      .leftJoinAndSelect('user.department', 'department')
+      .orderBy('task.createdAt', 'DESC');
+
+    // Apply filters
+    if (title) {
+      queryBuilder.andWhere('LOWER(task.title) LIKE LOWER(:title)', { title: `%${title}%` });
+    }
+    if (status) {
+      queryBuilder.andWhere('task.status = :status', { status });
+    }
+    if (userEmail) {
+      queryBuilder.andWhere('LOWER(user.email) LIKE LOWER(:userEmail)', { userEmail: `%${userEmail}%` });
+    }
+    if (departmentId === 'null') {
+      queryBuilder.andWhere('user.department IS NULL');
+    } else if (departmentId && departmentId !== 'all') {
+      queryBuilder.andWhere('department.id = :departmentId', { departmentId });
+    }
+
+    // Apply pagination
+    const tasksPerPage = parseInt(limit as string, 10) || 5;
+    const currentPage = parseInt(page as string, 10) || 1;
+    const skip = (currentPage - 1) * tasksPerPage;
+
+    const [tasks, total] = await queryBuilder
+      .skip(skip)
+      .take(tasksPerPage)
+      .getManyAndCount();
+
+    res.status(200).json({
+      total,
+      page: currentPage,
+      limit: tasksPerPage,
+      data: tasks
+    });
+  } catch (error) {
+    const errorMessage = (error as Error).message;
+    console.error('Error fetching all tasks for admin:', errorMessage);
+    res.status(500).json({ message: 'Server error', error: errorMessage });
+  }
+});
+
+
+// =================================================================
+// USER ROUTES
+// =================================================================
 
 // Create a new task
 router.post('/tasks', authMiddleware, async (req: AuthRequest, res: Response) => {
