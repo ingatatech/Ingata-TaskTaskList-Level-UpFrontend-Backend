@@ -36,7 +36,7 @@ Understanding role-based access control (Admin vs User).
 
 How to connect frontend & backend APIs securely.
 
-     🔮 Future Improvements
+## Future Improvements
 
 Add task categories or priorities.
 
@@ -45,9 +45,7 @@ Implement notifications for task deadlines.
 Improve UI/UX with animations.
 
 Add analytics dashboard for Admin.
-
-
-    🏗 Architecture & Workflow
+## Architecture & Workflow
 User Management Flow
 
 Admin Creates User
@@ -76,10 +74,7 @@ User can now access their dashboard with new credentials
 Users perform CRUD operations on their tasks
 Admins manage users, departments, and view all tasks
 Real-time updates across the application
-
-
-
-    🧩 Component Architecture
+## Component Architecture
 Reusable Components
 The application demonstrates component reusability through a well-structured component library:
 Core Layout Components
@@ -105,16 +100,15 @@ TaskCard - Individual task display component
 UserManagementDialog - User creation and editing forms
 DepartmentManagementDialog - Department management forms
 
-    Component Reusability Benefits
-    The reusable component approach provides:
+## Component Reusability Benefits
+The reusable component approach provides:
 
 Consistency - Uniform UI/UX across the application
 Maintainability - Changes in one component reflect everywhere
 Development Speed - Faster development with pre-built components
 Type Safety - TypeScript interfaces ensure proper prop usage
-
-     🔐 Authentication System
-     Security Features
+## Authentication System
+Security Features
 
 JWT Token Authentication - Secure token-based authentication
 Password Hashing - bcrypt for secure password storage
@@ -124,7 +118,7 @@ First Login Security - Forced password change on initial login
 
 Authentication Flow
 User Creation → Email Notification → First Login → OTP Verification → Password Setup → Dashboard Access
-👥 User Roles & Permissions
+User Roles & Permissions
 Administrator
 
 Create, update, and delete users
@@ -140,7 +134,7 @@ View personal task dashboard
 Update profile information
 Cannot access administrative functions
 
-    🏢 Department Management
+   Department Management
 The application includes a comprehensive department management system:
 
 Department Creation - Admins can create organizational departments
@@ -148,8 +142,8 @@ User Assignment - Users can be assigned to specific departments
 Department Filtering - Filter users and tasks by department
 Department Statistics - Overview of department utilization
 
-     📊 Features
-     Task Management
+## System Features
+Task Management
 
 Create tasks with title, description, and priority
 Mark tasks as pending or completed
@@ -170,7 +164,7 @@ User activity overview
 Department-wise task distribution
 System usage metrics
 
-    🔮 Future Improvements
+## Future Improvements
 
 Add task categories 
 
@@ -180,8 +174,8 @@ Improve UI/UX with animations.
 
 Add analytics dashboard for Admin.
 
-     🚀 Getting Started
-    Prerequisites
+## Getting Started
+Prerequisites
 
 Node.js (v18 or higher)
 npm or yarn
