@@ -1,10 +1,8 @@
-  ##Project Overview
+## Project Overview
 TaskFlow is an enterprise-grade task management system that demonstrates modern full-stack development practices. 
 The application features a sophisticated user management system where administrators can create users, manage departments, and oversee task completion across the organization.
-
-
-    🛠 Tech Stack
-    Frontend
+## Tech Stack
+Frontend
 
 Next.js 14 - React framework with App Router
 TypeScript - Type-safe JavaScript
@@ -24,7 +22,7 @@ JWT - Authentication tokens
 bcrypt - Password hashing
 
 
-    📖 What I Learned
+## What I Learned
 
 How to build a full-stack project using Next.js + Express.js.
 
