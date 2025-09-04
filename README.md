@@ -1,6 +1,4 @@
-    📌 Project Overview
-
- 
+  ##Project Overview
 TaskFlow is an enterprise-grade task management system that demonstrates modern full-stack development practices. 
 The application features a sophisticated user management system where administrators can create users, manage departments, and oversee task completion across the organization.
 
